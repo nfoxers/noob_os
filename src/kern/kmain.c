@@ -1,17 +1,16 @@
 #include "stdint.h"
-#include "io.h"
 #include "video/printf.h"
-
-extern void set_idtr();
-extern void init_pic();
+#include "video/video.h"
+#include "cpu/idt.h"
 
 void kmain(void) {
-  clr_scr();
+  init_video();
   printkf("hello from C!\n");
-  printkf("trying to set up the idt...\n");
+  printkf("trying to set up the idt... ");
   set_idtr();
-  printkf("trying to initialize pics...\n");
+  printkf("trying to initialize the pic... ");
   init_pic();
-  asm volatile("sti");
+  //asm volatile("sti");
+  //todo: uhh serial, complete gdt n tss, maybe graphics mode
   return;
 }

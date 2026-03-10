@@ -45,6 +45,10 @@ boot:
   call print
 
   call testa20
+
+  mov si, msg15
+  call print
+
   call readdisk
   
   mov si, msg2
@@ -117,7 +121,7 @@ readdisk:
 .dap:
   db 0x10
   db 0x00
-  dw 64
+  dw 64 ; around 30KB of maximum kernel size ontop of FAT12
   dw 0x7c00
   dw 0x0000
   dq 0
@@ -134,6 +138,7 @@ gdtr:
 
 msg: db "hewwo world!", 0xa, 0xd, 0
 a20: db "a20 line disabled", 0xa, 0xd, 0
+msg15: db "trying to read disk... ", 0 
 dskerr: db "read disk failed", 0xa, 0xd, 0
 daskok: db "disk read persumably ok", 0xa, 0xd, 0
 msg2: db "trying to go into pm", 0xa, 0xd, 0

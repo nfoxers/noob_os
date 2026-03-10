@@ -11,7 +11,7 @@ isr_stub:
   add esp, 8
   iret
 
-irq_stub
+irq_stub:
   push esp
   call irq_handler
   add esp, 4

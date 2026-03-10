@@ -24,7 +24,12 @@ struct regs {
   uint32_t eflags;
 } __attribute__((packed));
 
-void PIC_remap(int offset1, int offset2);
-void PIC_sendEOI(uint8_t irq);
+typedef void (*isr_hand)(struct regs *r);
+
+void set_idtr();
+void init_pic();
+
+void register_ex(isr_hand r, uint8_t no);
+void register_irq(isr_hand r, uint8_t no);
 
 #endif

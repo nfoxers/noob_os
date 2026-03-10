@@ -1,6 +1,7 @@
 #include "cpu/idt.h"
 #include "io.h"
 #include "video/printf.h"
+#include "video/video.h"
 
 #define EX 0x8E
 #define TR 0x8F
@@ -14,17 +15,17 @@
 
 #define PIC_EOI 0x20
 
-#define ICW1_ICW4 0x01      /* Indicates that ICW4 will be present */
-#define ICW1_SINGLE 0x02    /* Single (cascade) mode */
-#define ICW1_INTERVAL4 0x04 /* Call address interval 4 (8) */
-#define ICW1_LEVEL 0x08     /* Level triggered (edge) mode */
-#define ICW1_INIT 0x10      /* Initialization - required! */
+#define ICW1_ICW4 0x01
+#define ICW1_SINGLE 0x02
+#define ICW1_INTERVAL4 0x04
+#define ICW1_LEVEL 0x08
+#define ICW1_INIT 0x10
 
-#define ICW4_8086 0x01       /* 8086/88 (MCS-80/85) mode */
-#define ICW4_AUTO 0x02       /* Auto (normal) EOI */
-#define ICW4_BUF_SLAVE 0x08  /* Buffered mode/slave */
-#define ICW4_BUF_MASTER 0x0C /* Buffered mode/master */
-#define ICW4_SFNM 0x10       /* Special fully nested (not) */
+#define ICW4_8086 0x01
+#define ICW4_AUTO 0x02
+#define ICW4_BUF_SLAVE 0x08
+#define ICW4_BUF_MASTER 0x0C
+#define ICW4_SFNM 0x10
 
 #define CASCADE_IRQ 2
 
@@ -72,6 +73,9 @@ extern void _irq4(void);
 extern void _irq5(void);
 extern void _irq6(void);
 extern void _irq7(void);
+
+isr_hand exception_hand[32] = {0};
+isr_hand irq_hand[8] = {0};
 
 void set_g(void (*a)(void), uint8_t idx, uint8_t flg) {
   idt_g[idx].flag = flg;
@@ -131,7 +135,7 @@ void set_idtr() {
 
   asm volatile("lidt (%0)" ::"r"(&idtr_s) : "memory");
 
-  printkf("interrupts are ok\n");
+  printk("interrupt ok\n");
 }
 
 void pic_sm(uint8_t line) { outb(PIC1_DATA, inb(PIC1_DATA) | (1 << line)); }
@@ -140,30 +144,26 @@ void pic_cm(uint8_t line) { outb(PIC1_DATA, inb(PIC1_DATA) & ~(1 << line)); }
 
 void pic_eoi() { outb(PIC1_COMMAND, PIC_EOI); }
 
-static inline void io_wait(void)
-{
-    outb(0x80, 0);
-}
-
+static inline void io_wait(void) { outb(0x80, 0); }
 
 void pic_remap(int offset1, int offset2) {
-	outb(PIC1_COMMAND, ICW1_INIT | ICW1_ICW4);  // starts the initialization sequence (in cascade mode)
-	io_wait();
-	outb(PIC2_COMMAND, ICW1_INIT | ICW1_ICW4);
-	io_wait();
-	outb(PIC1_DATA, offset1);                 // ICW2: Master PIC vector offset
-	io_wait();
-	outb(PIC2_DATA, offset2);                 // ICW2: Slave PIC vector offset
-	io_wait();
-	outb(PIC1_DATA, 1 << CASCADE_IRQ);        // ICW3: tell Master PIC that there is a slave PIC at IRQ2
-	io_wait();
-	outb(PIC2_DATA, 2);                       // ICW3: tell Slave PIC its cascade identity (0000 0010)
-	io_wait();
-	
-	outb(PIC1_DATA, ICW4_8086);               // ICW4: have the PICs use 8086 mode (and not 8080 mode)
-	io_wait();
-	outb(PIC2_DATA, ICW4_8086);
-	io_wait();
+  outb(PIC1_COMMAND, ICW1_INIT | ICW1_ICW4);
+  io_wait();
+  outb(PIC2_COMMAND, ICW1_INIT | ICW1_ICW4);
+  io_wait();
+  outb(PIC1_DATA, offset1);
+  io_wait();
+  outb(PIC2_DATA, offset2);
+  io_wait();
+  outb(PIC1_DATA, 1 << CASCADE_IRQ);
+  io_wait();
+  outb(PIC2_DATA, 2);
+  io_wait();
+
+  outb(PIC1_DATA, ICW4_8086);
+  io_wait();
+  outb(PIC2_DATA, ICW4_8086);
+  io_wait();
 
   outb(PIC1_DATA, 0);
   outb(PIC2_DATA, 0);
@@ -172,16 +172,37 @@ void pic_remap(int offset1, int offset2) {
 void init_pic() {
   pic_remap(0x20, 0x28);
   pic_cm(0);
-  printkf("pics ok\n");
+  printk("pic ok\n");
 }
 
 void isr_handler(struct regs *r) {
   printkf("interrupt at eip=%p, exc %d\n", r->eip, r->int_no);
+  isr_hand e = exception_hand[r->int_no];
+  if(!e) {
+    printk("no exception handler! halting now...\n");
+    asm volatile("cli");
+    asm volatile("hlt");
+  } 
+  e(r);
   return;
 }
 
 void irq_handler(struct regs *r) {
   printkf("irq exception %d\n", r->int_no);
-  pic_eoi();
+  if(r->int_no < 32 || r->int_no >= 40) return;
+  isr_hand e = irq_hand[r->int_no - 32];
+  if(!e) {
+    printk("no irq handler! unhandling irq...\n");
+    return;
+  }
+  e(r);
   return;
+}
+
+void register_ex(isr_hand r, uint8_t no) {
+  exception_hand[no] = r;
+}
+
+void register_irq(isr_hand r, uint8_t no) {
+  irq_hand[no] = r;
 }

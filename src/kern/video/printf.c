@@ -1,11 +1,12 @@
 #define NANOPRINTF_IMPLEMENTATION
 #include "video/printf.h"
+#include "video/video.h"
 #include "stdarg.h"
-#include "io.h"
+
 
 void wrapper(int c, void *ctx) {
   (void)ctx;
-  putchar((char)c);
+  putchr((char)c);
 }
 
 int printkf(const char *fmt, ...) {

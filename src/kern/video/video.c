@@ -1,4 +1,5 @@
 #include "io.h"
+#include "video/printf.h"
 #include <stdint.h>
 
 #define VGA ((uint8_t *)0xb8000)
@@ -16,8 +17,19 @@ void setcursor() {
   outb(0x3d5, (uint8_t)(cursor >> 8) & 0xff);
 }
 
-void putchar(char c) {
-  if(c == '\n') {
+void readcursor() {
+  uint8_t hi, lo;
+  outb(0x3d4, 0x0f);
+  lo = inb(0x3d5);
+
+  outb(0x3d4, 0x0e);
+  hi = inb(0x3d5);
+
+  cursor = (hi << 8) | lo;
+}
+
+void putchr(char c) {
+  if (c == '\n') {
     cursor += 80 - (cursor % 80);
   } else {
     VGA[cursor * 2] = c;
@@ -28,15 +40,16 @@ void putchar(char c) {
 }
 
 void printk(char *a) {
-  while(*a) {
-    putchar(*a);
+  while (*a) {
+    putchr(*a);
     a++;
   }
 }
 
 void scroll_n(uint8_t n) {
-  for(;n > 0; n--) {
-    if(cursor > 80) cursor -= 80;
+  for (; n > 0; n--) {
+    if (cursor > 80)
+      cursor -= 80;
     scroll();
   }
   setcursor();
@@ -45,4 +58,9 @@ void scroll_n(uint8_t n) {
 void clr_scr() {
   clear();
   cursor = 0;
+}
+
+void init_video() {
+  readcursor();
+  printkf("video initialized\n");
 }
