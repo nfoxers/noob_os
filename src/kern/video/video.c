@@ -28,14 +28,31 @@ void readcursor() {
   cursor = (hi << 8) | lo;
 }
 
+void scroll_once() {
+  scroll();
+  cursor -= 80;
+  setcursor();
+}
+
+void backspace() {
+  VGA[--cursor * 2] = 0;
+  setcursor();
+}
+
 void putchr(char c) {
   if (c == '\n') {
     cursor += 80 - (cursor % 80);
+  } else if (c == '\b') {
+    backspace();
   } else {
     VGA[cursor * 2] = c;
     VGA[cursor * 2 + 1] = 0x0f;
     cursor++;
   }
+
+  if (cursor >= 2000)
+    scroll_once();
+
   setcursor();
 }
 

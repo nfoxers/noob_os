@@ -9,9 +9,9 @@ SRC = $(shell find ./src/kern -name *.c -o -name *.asm)
 OBJ = $(patsubst ./src/kern/%.c,./build/kern/%.o, $(SRC))
 OBJ := $(patsubst ./src/kern/%.asm,./build/kern/%.o, $(OBJ))
 
-.PHONY: clean run
+.PHONY: clean run size
 
-all: bin/os.img
+all: bin/os.img size
 
 bin/os.img: build/boot.bin build/kern.bin
 	@mkdir -p bin
@@ -43,3 +43,6 @@ clean:
 run: bin/os.img
 	qemu-system-i386 -drive format=raw,file=$<
 	
+size: tools/chksiz.py
+	@echo --------------
+	@python3 $<

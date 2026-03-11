@@ -121,7 +121,7 @@ readdisk:
 .dap:
   db 0x10
   db 0x00
-  dw 64 ; around 30KB of maximum kernel size ontop of FAT12
+  dw 64 ; around 25KB of maximum kernel size ontop of FAT12
   dw 0x7c00
   dw 0x0000
   dq 0

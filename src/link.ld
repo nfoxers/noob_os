@@ -13,7 +13,9 @@ SECTIONS
     *(.data*)
   }
   .bss : {
+    __bss_start__ = .;
     *(.bss*)
     *(COMMON)
+    __bss_end__ = .;
   }
 }

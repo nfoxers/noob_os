@@ -165,13 +165,12 @@ void pic_remap(int offset1, int offset2) {
   outb(PIC2_DATA, ICW4_8086);
   io_wait();
 
-  outb(PIC1_DATA, 0);
-  outb(PIC2_DATA, 0);
+  outb(PIC1_DATA, 0xff); // disable irqs alltogether
+  outb(PIC2_DATA, 0xff);
 }
 
 void init_pic() {
   pic_remap(0x20, 0x28);
-  pic_cm(0);
   printk("pic ok\n");
 }
 
@@ -188,7 +187,7 @@ void isr_handler(struct regs *r) {
 }
 
 void irq_handler(struct regs *r) {
-  printkf("irq exception %d\n", r->int_no);
+  //printkf("irq exception %d\n", r->int_no - 32);
   if(r->int_no < 32 || r->int_no >= 40) return;
   isr_hand e = irq_hand[r->int_no - 32];
   if(!e) {
