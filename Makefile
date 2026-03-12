@@ -2,10 +2,10 @@ AS = nasm
 CC = clang
 LD = ld.lld
 
-CFLAGS = -target i386-elf -ffreestanding -m32 -Iinclude -Oz
+CFLAGS = -target i386-elf -g -ffreestanding -m32 -Iinclude -Oz
 LDFLAGS = -m elf_i386 -T src/link.ld
 
-SRC = $(shell find ./src/kern -name *.c -o -name *.asm)
+SRC = $(shell find ./src/kern -name '*.c' -o -name '*.asm')
 OBJ = $(patsubst ./src/kern/%.c,./build/kern/%.o, $(SRC))
 OBJ := $(patsubst ./src/kern/%.asm,./build/kern/%.o, $(OBJ))
 
@@ -18,6 +18,7 @@ bin/os.img: build/boot.bin build/kern.bin
 	cp $< $@
 	truncate $@ -s 320K
 	mcopy -i $@ build/kern.bin ::KERNEL.BIN
+	mcopy -i $@ data/data.txt ::DATA.TXT
 
 build/boot.bin: src/boot/boot.asm
 	@mkdir -p build

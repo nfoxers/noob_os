@@ -14,5 +14,5 @@ span = boot_offset + fat_offset + siz
 max = read_sectors * 512 - fat_offset
 
 print(f"kernel size: {siz} B {siz/1000:.3} KB ({siz/1024:.3} KiB)")
-print(f"memory span: 0x9400 -- 0x{span:X}")
+print(f"memory span: 0x9400 -- 0x{span:X} (0x{siz:X})")
 print(f"maximum kernel size: {max} B {max/1000:.3} KB, {(siz/max * 100):.3}%")

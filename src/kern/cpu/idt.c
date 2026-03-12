@@ -1,6 +1,5 @@
 #include "cpu/idt.h"
 #include "io.h"
-#include "video/printf.h"
 #include "video/video.h"
 
 #define EX 0x8E
@@ -175,10 +174,10 @@ void init_pic() {
 }
 
 void isr_handler(struct regs *r) {
-  printkf("interrupt at eip=%p, exc %d\n", r->eip, r->int_no);
+  //printkf("interrupt at eip=%p, exc %d\n", r->eip, r->int_no);
   isr_hand e = exception_hand[r->int_no];
   if(!e) {
-    printk("no exception handler! halting now...\n");
+    //printk("no exception handler! halting now...\n");
     asm volatile("cli");
     asm volatile("hlt");
   } 
@@ -188,6 +187,7 @@ void isr_handler(struct regs *r) {
 
 void irq_handler(struct regs *r) {
   //printkf("irq exception %d\n", r->int_no - 32);
+  
   if(r->int_no < 32 || r->int_no >= 40) return;
   isr_hand e = irq_hand[r->int_no - 32];
   if(!e) {

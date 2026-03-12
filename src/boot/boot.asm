@@ -39,6 +39,7 @@ boot:
   mov sp, 0x7c00
   mov bp, sp
 
+  mov [0x03ff], dl
   mov [drivenum], dl
 
   mov si, msg
@@ -157,7 +158,6 @@ pmstart:
   mov esp, 0x7c00
   mov ebp, esp
 
-  mov byte [0xb8000], 'B'
   jmp 0x9400
 
   cli

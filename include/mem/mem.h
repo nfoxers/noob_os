@@ -16,8 +16,19 @@ struct bios_da {
 void parse_bda();
 
 char *kstrtok(char *str, const char *delim);
-void kstrncpy(const char *s, char *d);
-uint8_t kstrcmp(const char *s, char *d);
+void kstrncpy(const char *s, char *d, uint16_t siz);
+
+void kmemcpy(const void *s, void *d, uint16_t siz);
+uint8_t kmemcmp(const void *s, const void *d, uint16_t siz);
+void kmemset(void *s, uint8_t c, size_t len);
+
+void kstrcpy(const char *s, char *d);
+uint8_t kstrncmp(const char *s, const char *d, uint16_t siz);
+uint8_t kstrcmp(const char *s, const char *d);
+size_t kstrlen(const char *s);
 void zero_bss();
+
+void *kmalloc(uint16_t size);
+void stupidfree(uint16_t size);
 
 #endif
