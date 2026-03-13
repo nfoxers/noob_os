@@ -96,7 +96,7 @@ uint8_t getch() {
   return c;
 }
 
-char *kgets(char *s, uint16_t siz) {
+int kgets(char *s, uint16_t siz) {
   char c = 0;
   uint16_t idx = 0;
   while ((c = getch()) != '\n') {
@@ -109,5 +109,5 @@ char *kgets(char *s, uint16_t siz) {
       idx--;
   }
   s[idx] = 0;
-  return s;
+  return idx;
 }

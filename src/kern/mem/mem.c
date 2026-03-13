@@ -57,30 +57,30 @@ char *kstrtok(char *str, const char *delim) {
   return start;
 }
 
-void kstrncpy(const char *s, char *d, uint16_t siz) {
+void kstrncpy(char *dst, const char *src, size_t siz) {
   while(siz--) {
-    *d++ = *s++;
+    *dst++ = *src++;
   }
 }
 
-void kstrcpy(const char *s, char *d) {
-  while((*d++ = *s++)) ; 
+void kstrcpy(char *dst, const char *src) {
+  while((*dst++ = *src++)) ; 
 }
 
-void kmemcpy(const void *s, void *d, uint16_t siz) {
+void kmemcpy(void *dst, const void *src, size_t siz) {
   for(; siz > 0; siz--) {
-    *(uint8_t *)d++ = *(uint8_t *)s++;
+    *(uint8_t *)dst++ = *(uint8_t *)src++;
   }
 }
 
-uint8_t kmemcmp(const void *s, const void *d, uint16_t siz) {
-  while(siz && (*(uint8_t*)s == *(uint8_t*)d)) s++, d++, siz--;
+uint8_t kmemcmp(const void *s1, const void *s2, size_t siz) {
+  while(siz && (*(uint8_t*)s1 == *(uint8_t*)s2)) s1++, s2++, siz--;
   if(siz == 0) return 0;
-  return *(uint8_t *)s - *(uint8_t *)d;
+  return *(uint8_t *)s1 - *(uint8_t *)s2;
 }
 
-void kmemset(void *s, uint8_t c, size_t len) {
-  asm volatile("rep stosb" : "+D"(s), "+c"(len) : "a"(c) : "memory");
+void kmemset(void *s, int c, size_t len) {
+  asm volatile("rep stosb" : "+D"(s), "+c"(len) : "a"((uint8_t)c) : "memory");
 }
 
 uint8_t kstrcmp(const char *s, const char *d) {
@@ -89,17 +89,27 @@ uint8_t kstrcmp(const char *s, const char *d) {
   return *(uint8_t *)s - *(uint8_t *)d;
 }
 
-uint8_t kstrncmp(const char *s, const char *d, uint16_t size) {
+uint8_t kstrncmp(const char *s1, const char *s2, size_t siz) {
 
-  while(size && *s && (*s == *d)) {
-    s++;
-    d++;
-    size--;
+  while(siz && *s1 && (*s1 == *s2)) {
+    s1++;
+    s2++;
+    siz--;
   }
 
-  if(size == 0) return 0;
+  if(siz == 0) return 0;
 
-  return *(uint8_t *)s - *(uint8_t *)d;
+  return *(uint8_t *)s1 - *(uint8_t *)s2;
+}
+
+char *kstrrchr(const char *s, int c) {
+  const char *l = NULL;
+  while(*s) {
+    if(*s == (char)c) l = s;
+    s++;
+  }
+  if(!c) return (char*)s;
+  return (char*)l;
 }
 
 size_t kstrlen(const char *s) {
@@ -109,19 +119,19 @@ size_t kstrlen(const char *s) {
 }
 
 void zero_bss() {
-  heap_ptr = &__bss_end__;
   uint8_t *p = &__bss_start__;
   while (p < &__bss_end__) {
     *p++ = 0;
   }
+  heap_ptr = &__bss_end__;
 }
 
-void *kmalloc(uint16_t size) { // stupid allocator
+void *kmalloc(size_t size) { // stupid allocator
   void *addr = heap_ptr;
   heap_ptr += size;
   return addr;
 }
 
-void stupidfree(uint16_t size) { // idiot free-er
+void stupidfree(size_t size) { // idiot free-er
   heap_ptr -= size;
 }

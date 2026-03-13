@@ -4,6 +4,8 @@
 #include "stdint.h"
 #include "stddef.h"
 
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
+
 struct bios_da {
   uint16_t com_port[4];
   uint16_t lpt_port[3];
@@ -15,20 +17,21 @@ struct bios_da {
 
 void parse_bda();
 
-char *kstrtok(char *str, const char *delim);
-void kstrncpy(const char *s, char *d, uint16_t siz);
+void kmemcpy(void * dst, const void * src, size_t siz);
+uint8_t kmemcmp(const void *s1, const void *s2, size_t siz);
+void kmemset(void *dst, int c, size_t len);
 
-void kmemcpy(const void *s, void *d, uint16_t siz);
-uint8_t kmemcmp(const void *s, const void *d, uint16_t siz);
-void kmemset(void *s, uint8_t c, size_t len);
-
-void kstrcpy(const char *s, char *d);
-uint8_t kstrncmp(const char *s, const char *d, uint16_t siz);
-uint8_t kstrcmp(const char *s, const char *d);
+void kstrncpy(char *dst, const char *src, size_t siz);
+void kstrcpy(char *dst, const char *src);
+uint8_t kstrncmp(const char *s1, const char *s2, size_t siz);
+uint8_t kstrcmp(const char *s1, const char *s2);
 size_t kstrlen(const char *s);
+char *kstrtok(char *str, const char *delim);
+char *kstrrchr(const char *s, int c);
+
 void zero_bss();
 
-void *kmalloc(uint16_t size);
-void stupidfree(uint16_t size);
+void *kmalloc(size_t size);
+void stupidfree(size_t size);
 
 #endif

@@ -28,10 +28,10 @@ scroll:
   ret
 
 clear:
-  push esi
+  push edi
   mov eax, 0
   mov edi, 0xb8000
   mov ecx, 4000/4
   rep stosd
-  pop esi
+  pop edi
   ret

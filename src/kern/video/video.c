@@ -72,9 +72,10 @@ void scroll_n(uint8_t n) {
   setcursor();
 }
 
-void clr_scr() {
-  clear();
+void clr_scr() {  
   cursor = 0;
+  setcursor();
+  clear();
 }
 
 void init_video() {

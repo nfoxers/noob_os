@@ -6,6 +6,6 @@
 void init_kbd();
 uint8_t getch();
 
-char *kgets(char *s, uint16_t siz);
+int kgets(char *s, uint16_t siz);
 
 #endif

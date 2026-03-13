@@ -9,7 +9,7 @@ SRC = $(shell find ./src/kern -name '*.c' -o -name '*.asm')
 OBJ = $(patsubst ./src/kern/%.c,./build/kern/%.o, $(SRC))
 OBJ := $(patsubst ./src/kern/%.asm,./build/kern/%.o, $(OBJ))
 
-.PHONY: clean run size
+.PHONY: clean run debug size
 
 all: bin/os.img size
 
@@ -19,6 +19,8 @@ bin/os.img: build/boot.bin build/kern.bin
 	truncate $@ -s 320K
 	mcopy -i $@ build/kern.bin ::KERNEL.BIN
 	mcopy -i $@ data/data.txt ::DATA.TXT
+	mmd -i $@ ::TDIR
+	mcopy -i $@ data/data.txt ::TDIR/DATA.TXT
 
 build/boot.bin: src/boot/boot.asm
 	@mkdir -p build
@@ -44,6 +46,9 @@ clean:
 run: bin/os.img
 	qemu-system-i386 -drive format=raw,file=$<
 	
+debug: bin/os.img
+	qemu-system-i386 -s -S -drive format=raw,file=$<
+
 size: tools/chksiz.py
 	@echo --------------
 	@python3 $<

@@ -2,9 +2,9 @@
 ### do not try at home
 this is undoubtedly the most useless bootable software in the world, anyways just run `make` (make sure `nasm` is installed on your system) and bin/os.img should pop up. in addition, `make run` should run the executable (using qemu-system-i386)
 
-currently the kernel is about 8KB in size (wow), has printf and part-working "shell" (no commands yet). nothing interesting, though
+currently the kernel is about 10KB in size (wow), has printf and part-working "shell" (unfun commands). nothing interesting, though
 
-it has too a part-working fat12 driver with a bad inode implementation, the next (major) commit should fix it
+it has too a fat12 driver in some way, it is the MOST COMPLEX part of the entire project!
 
 prerequisites you *must* have before compiling:
 ```
@@ -28,7 +28,7 @@ and yeah, this might be the current memory map:
 |              |
 |              | 
 | kernel       | 
-+--------------+ 0x9400 7.6 KB
++--------------+ 0x9400 9.7 KB
 |              |
 | root dirs    | 
 +--------------+ 0x8600 3584 B

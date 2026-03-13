@@ -28,23 +28,40 @@ void kmain(void) {
 
   static char buf[128];
   static char argv[8][16];
+
   while (1) {
     printk("input> ");
-    kgets(buf, sizeof buf);
+    int rd = kgets(buf, sizeof buf);
     putchr('\n');
+
+    if(rd == 0){
+      continue;
+    }
 
     char *tok = kstrtok(buf, " ");
     uint8_t idx = 0;
     while (tok) {
-      kstrncpy(tok, argv[idx++], 16);
+      kstrncpy(argv[idx++], tok, 16);
       tok = kstrtok(NULL, " ");
     }
 
     if (!kstrcmp(buf, "help")) {
-      printk("commands to be implemented\n");
-    } else if(!kstrcmp(buf, "end")) {
-      printk("ending...\n");
+      printk("supported commands: exit ls rm touch clear\n");
+    } else if(!kstrcmp(buf, "exit")) {
+      printk("exiting...\n");
       break;
+    } else if(!kstrcmp(buf, "ls")) {
+      list_dir();
+    } else if(!kstrcmp(buf, "rm")) {
+      if(!idx) {
+        printk("specify your file path!\n");
+        continue;
+      }
+      sys_unlink(argv[1]);
+    } else if(!kstrcmp(buf, "touch")) {
+      int fd = sys_open(argv[1], O_CREAT);
+    } else if(!kstrcmp(buf, "clear")) {
+      clr_scr();
     }
     else {
       printkf("unrecognized command '%s'\n", argv[0]);
@@ -52,7 +69,7 @@ void kmain(void) {
   }
 
   // todo: again, gdt, serial (for why), memory safety, etc
-  // todo2: fat12 driver (oh lord) (partially done)
+  // todo2: fat12 driver (oh lord) (MOSTLY done)
   
   enditall();
 
