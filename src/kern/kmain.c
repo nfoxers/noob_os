@@ -1,3 +1,4 @@
+#include "cpu/gdt.h"
 #include "cpu/idt.h"
 #include "driver/fat12.h"
 #include "driver/keyboard.h"
@@ -7,6 +8,7 @@
 #include "video/video.h"
 
 extern void enditall();
+extern void usermode();
 
 void kmain(void) {
   zero_bss();
@@ -24,7 +26,8 @@ void kmain(void) {
   printk("initializing the keyboard... ");
   init_kbd();
 
-  parse_bda();
+  printk("setting up the gdt... ");
+  set_gdt();
 
   static char buf[128];
   static char argv[8][16];
@@ -53,12 +56,16 @@ void kmain(void) {
     } else if(!kstrcmp(buf, "ls")) {
       list_dir();
     } else if(!kstrcmp(buf, "rm")) {
-      if(!idx) {
+      if(idx == 1) {
         printk("specify your file path!\n");
         continue;
       }
       sys_unlink(argv[1]);
     } else if(!kstrcmp(buf, "touch")) {
+        if(idx == 1) {
+        printk("specify your file path!\n");
+        continue;
+      }
       int fd = sys_open(argv[1], O_CREAT);
     } else if(!kstrcmp(buf, "clear")) {
       clr_scr();

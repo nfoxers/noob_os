@@ -1,5 +1,42 @@
 [bits 32]
 
+extern flush_gdt
+extern usermode
+
+flush_gdt:
+  mov ax, 0x010
+  mov ds, ax
+  mov es, ax
+  mov ss, ax
+  mov gs, ax
+  mov fs, ax
+  jmp 0x08:flush_gdt.fcs
+.fcs:
+  mov ax, 5*8
+  ltr ax 
+  ret
+
+usermode:
+  mov ax, (4 * 8) | 3
+  mov ds, ax
+  mov es, ax
+  mov fs, ax
+  mov gs, ax
+
+  mov eax, esp
+  push dword (4 * 8) | 3
+
+  push eax
+  pushf
+  push dword (3 * 8) | 3
+  
+  push u_tst
+  iret
+
+u_tst:
+.jmp:
+  jmp u_tst.jmp
+
 extern isr_handler
 extern irq_handler
 

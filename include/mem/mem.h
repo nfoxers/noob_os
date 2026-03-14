@@ -6,6 +6,11 @@
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
+#define HEAP_SIZ 1024
+
+extern uint8_t __bss_start__;
+extern uint8_t __bss_end__;
+
 struct bios_da {
   uint16_t com_port[4];
   uint16_t lpt_port[3];

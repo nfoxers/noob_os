@@ -28,7 +28,7 @@ and yeah, this might be the current memory map:
 |              |
 |              | 
 | kernel       | 
-+--------------+ 0x9400 9.7 KB
++--------------+ 0x9400 10.2 KB
 |              |
 | root dirs    | 
 +--------------+ 0x8600 3584 B

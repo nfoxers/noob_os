@@ -4,9 +4,6 @@
 
 #define BDA_ADDR ((struct bios_da *)0x400)
 
-extern uint8_t __bss_start__;
-extern uint8_t __bss_end__;
-
 void *heap_ptr = 0;
 
 void parse_bda() {
@@ -128,6 +125,7 @@ void zero_bss() {
 
 void *kmalloc(size_t size) { // stupid allocator
   void *addr = heap_ptr;
+  if((int)heap_ptr + size - __bss_end__ > HEAP_SIZ) return NULL;
   heap_ptr += size;
   return addr;
 }
