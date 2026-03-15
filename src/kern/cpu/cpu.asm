@@ -34,13 +34,39 @@ usermode:
   iret
 
 u_tst:
+  cli
 .jmp:
   jmp u_tst.jmp
+
+extern set_cr3
+
+set_cr3:
+  push ebp
+  mov ebp, esp
+
+  ; [ebp+8] = arg1
+  mov eax, [ebp+8]
+  mov cr3, eax
+
+  mov eax, cr0
+  or eax, 0x80000001
+  mov cr0, eax
+
+  mov esp, ebp
+  pop ebp
+  ret
 
 extern isr_handler
 extern irq_handler
 
 isr_stub:
+  mov ax, 0x10
+  mov es, ax
+  mov ds, ax
+  mov ss, ax
+  mov gs, ax
+  mov fs, ax
+
   push esp
   call isr_handler
   add esp, 4
@@ -49,6 +75,13 @@ isr_stub:
   iret
 
 irq_stub:
+  mov ax, 0x10
+  mov es, ax
+  mov ds, ax
+  mov ss, ax
+  mov gs, ax
+  mov fs, ax
+
   push esp
   call irq_handler
   add esp, 4

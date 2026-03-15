@@ -133,3 +133,16 @@ void *kmalloc(size_t size) { // stupid allocator
 void stupidfree(size_t size) { // idiot free-er
   heap_ptr -= size;
 }
+
+uint32_t page_table[256] __attribute__((aligned(4096)));
+uint32_t page_dir = 0;
+
+extern void set_cr3(uint32_t pagedir);
+
+void set_page() {
+  for(int i = 0; i < 256; i++) {
+    page_table[i] = i * 4096 | 3;
+  }
+  page_dir = (uint32_t)page_table | 3;
+  set_cr3((uint32_t)&page_dir);
+}

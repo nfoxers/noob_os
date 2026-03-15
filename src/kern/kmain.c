@@ -2,6 +2,7 @@
 #include "cpu/idt.h"
 #include "driver/fat12.h"
 #include "driver/keyboard.h"
+#include "driver/time.h"
 #include "mem/mem.h"
 #include "stdint.h"
 #include "video/printf.h"
@@ -9,6 +10,7 @@
 
 extern void enditall();
 extern void usermode();
+void set_page();
 
 void kmain(void) {
   zero_bss();
@@ -28,6 +30,12 @@ void kmain(void) {
 
   printk("setting up the gdt... ");
   set_gdt();
+
+  struct time_s s;
+  read_time(&s);
+
+  //usermode();
+  set_page();
 
   static char buf[128];
   static char argv[8][16];
@@ -66,17 +74,22 @@ void kmain(void) {
         printk("specify your file path!\n");
         continue;
       }
-      int fd = sys_open(argv[1], O_CREAT);
+      sys_open(argv[1], O_CREAT);
     } else if(!kstrcmp(buf, "clear")) {
       clr_scr();
     }
     else {
-      printkf("unrecognized command '%s'\n", argv[0]);
+      int fd = sys_open(argv[0], 0);
+      if(!fd) {
+        printkf("unrecognized command '%s'\n", argv[0]);
+        continue;
+      } // load and run if not INODE_DIR
     }
   }
 
-  // todo: again, gdt, serial (for why), memory safety, etc
-  // todo2: fat12 driver (oh lord) (MOSTLY done)
+  // todo: again, gdt (uh done), serial (for why), memory safety, etc
+  // todo2: FIX fat12 driver (oh lord)
+  // todo3: PAGING!!!!!! SYSCALLS!!!!!!!
   
   enditall();
 

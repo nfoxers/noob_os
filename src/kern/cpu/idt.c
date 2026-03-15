@@ -1,6 +1,7 @@
 #include "cpu/idt.h"
 #include "io.h"
 #include "video/video.h"
+#include "video/printf.h"
 
 #define EX 0x8E
 #define TR 0x8F
@@ -143,7 +144,7 @@ void pic_cm(uint8_t line) { outb(PIC1_DATA, inb(PIC1_DATA) & ~(1 << line)); }
 
 void pic_eoi() { outb(PIC1_COMMAND, PIC_EOI); }
 
-static inline void io_wait(void) { outb(0x80, 0); }
+
 
 void pic_remap(int offset1, int offset2) {
   outb(PIC1_COMMAND, ICW1_INIT | ICW1_ICW4);
@@ -174,10 +175,10 @@ void init_pic() {
 }
 
 void isr_handler(struct regs *r) {
-  //printkf("interrupt at eip=%p, exc %d\n", r->eip, r->int_no);
+  printkf("interrupt at eip=%p, exc %d\n", r->eip, r->int_no);
   isr_hand e = exception_hand[r->int_no];
   if(!e) {
-    //printk("no exception handler! halting now...\n");
+    printk("no exception handler! halting now...\n");
     asm volatile("cli");
     asm volatile("hlt");
   } 

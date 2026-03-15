@@ -27,7 +27,7 @@ void set_gdt() {
   fill_seg(&sd[3], 0xffff, 0, 0x0c, 0xfa);
   fill_seg(&sd[4], 0xffff, 0, 0x0c, 0xf2);
 
-  glob_tss.ss0 = 0x08;
+  glob_tss.ss0 = 0x10;
   glob_tss.esp0 = (int)&__bss_end__ + HEAP_SIZ;
 
   fill_seg(&sd[5], sizeof(struct tss), (size_t)&glob_tss, 0x00, 0x89);

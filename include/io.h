@@ -8,4 +8,6 @@ void outw(uint16_t a, uint16_t d);
 uint8_t inb(uint16_t a);
 uint16_t inw(uint16_t a);
 
+static inline void io_wait(void) { outb(0x80, 0); }
+
 #endif

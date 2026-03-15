@@ -2,13 +2,15 @@ AS = nasm
 CC = clang
 LD = ld.lld
 
-CFLAGS = -target i386-elf -g -ffreestanding -m32 -Iinclude -Oz -MMD -MP -mno-sse -msoft-float -march=i486
+CFLAGS = -target i386-elf -g -Wall -Wextra -ffreestanding -m32 -Iinclude -Oz -MMD -MP -mno-sse -msoft-float -march=i486
 LDFLAGS = -m elf_i386 -T src/link.ld
 
 SRC = $(shell find ./src/kern -name '*.c' -o -name '*.asm')
 OBJ = $(patsubst ./src/kern/%.c,./build/kern/%.o, $(SRC))
 OBJ := $(patsubst ./src/kern/%.asm,./build/kern/%.o, $(OBJ))
-DEP := (OBJ:.o=.d)
+
+DEP := $(OBJ:.o=.d)
+
 
 .PHONY: clean run debug size
 
@@ -40,6 +42,8 @@ build/%.o: src/%.c
 build/%.o: src/%.asm
 	@mkdir -p $(dir $@)
 	$(AS) -felf $< -o $@
+
+-include $(DEP)
 
 clean:
 	rm -rf build bin
