@@ -23,7 +23,7 @@ struct fat12info {
 
 struct fat12info fsinfo = {0};
 
-struct file global_fd[MAX_FD] = {0};
+struct file root_fd[NOFILE] = {0};
 
 void init_fs() {
   if (BS->bootsig != 0xaa55) {
@@ -376,7 +376,7 @@ int sys_unlink(const char *path) {
 
 int sys_open(const char *fname, uint16_t flags) {
   int fd = 1;
-  for(; global_fd[fd].flags & F_USED ;fd++); // find available fd, 0 is reserved for errors
+  for(; root_fd[fd].flags & F_USED ;fd++); // find available fd, 0 is reserved for errors
 
   struct inode *in = kmalloc(sizeof(struct inode));
   if(fat_lookup(fname, in) && !(flags & O_CREAT)) {
@@ -389,14 +389,14 @@ int sys_open(const char *fname, uint16_t flags) {
 
   // going here means the file exists
 
-  global_fd[fd].inode = in;
-  global_fd[fd].flags = F_USED;
+  root_fd[fd].inode = in;
+  root_fd[fd].flags = F_USED;
 
   return fd;
 } 
 
 size_t sys_read(int fd, uint8_t *buf, size_t n) {
-  struct file *f = &global_fd[fd];
+  struct file *f = &root_fd[fd];
   if(!(f->flags & F_USED)) {
     printkf("invalid fd %d :(\n", fd);
     return 0;
@@ -412,7 +412,7 @@ size_t sys_read(int fd, uint8_t *buf, size_t n) {
 }
 
 size_t sys_write(int fd, const uint8_t *buf, size_t n) {
-  struct file *f = &global_fd[fd];
+  struct file *f = &root_fd[fd];
   if(!(f->flags & F_USED)) {
     printkf("invalid fd %d :(\n", fd);
     return 0;

@@ -42,7 +42,7 @@ void read_time(struct time_s *tim) {
     tim->year = read_cmos(RTC_JHR);
 
     
-    printkf("ss/mm/hh: %02d/%02d/%02d\n", tim->sec, tim->min, tim->hour);
+    printkf("%02d:%02d:%02d (hh:mm:ss)\n", tim->hour, tim->min, tim->sec);
     return;
   }
 
@@ -55,5 +55,5 @@ void read_time(struct time_s *tim) {
   tim->year = normal(read_cmos(RTC_JHR));
 
     
-  printkf("ss/mm/hh: %02d/%02d/%02d\n", tim->sec, tim->min, tim->hour);
+  printkf("%02d:%02d:%02d (hh:mm:ss)\n", tim->hour, tim->min, tim->sec);
 }

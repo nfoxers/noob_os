@@ -34,8 +34,14 @@ volatile uint8_t kbd_buffer[K_BUFSIZ];
 volatile uint8_t head = 0;
 volatile uint8_t tail = 0;
 
+uint8_t special_depress(uint8_t scan) {
+  if(scan == (K_LSHIFT | 0x80)) return 1;
+  if(scan == (K_RSHIFT | 0x80)) return 1;
+  return 0;
+}
+
 uint8_t parse_char(uint8_t scan) {
-  if (scan > sizeof(scancode_map) && scan != (0x80 | K_LSHIFT)) {
+  if (scan > sizeof(scancode_map) && !special_depress(scan)) {
     return 0;
   }
 

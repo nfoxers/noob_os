@@ -123,26 +123,27 @@ void zero_bss() {
   heap_ptr = &__bss_end__;
 }
 
+#define MB_FREE 0x01
+
+struct mblock {
+  uint8_t flg;
+  uint32_t siz;
+  struct mblock *next;
+};
+
+struct mblock *mb_free = NULL;
+
 void *kmalloc(size_t size) { // stupid allocator
   void *addr = heap_ptr;
   if((int)heap_ptr + size - __bss_end__ > HEAP_SIZ) return NULL;
   heap_ptr += size;
   return addr;
+
+  if(!mb_free) { // we need to somehow allocate free bluks.. HOW?
+
+  }
 }
 
 void stupidfree(size_t size) { // idiot free-er
   heap_ptr -= size;
-}
-
-uint32_t page_table[256] __attribute__((aligned(4096)));
-uint32_t page_dir = 0;
-
-extern void set_cr3(uint32_t pagedir);
-
-void set_page() {
-  for(int i = 0; i < 256; i++) {
-    page_table[i] = i * 4096 | 3;
-  }
-  page_dir = (uint32_t)page_table | 3;
-  set_cr3((uint32_t)&page_dir);
 }

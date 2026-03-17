@@ -30,7 +30,7 @@
 #define CASCADE_IRQ 2
 
 volatile struct idtr idtr_s = {0};
-volatile struct idt_gate idt_g[40];
+volatile struct idt_gate idt_g[42];
 
 extern void _ex0(void);
 extern void _ex1(void);
@@ -74,7 +74,11 @@ extern void _irq5(void);
 extern void _irq6(void);
 extern void _irq7(void);
 
-isr_hand exception_hand[32] = {0};
+extern void _ex40(void);
+
+extern void c_switch2();
+
+isr_hand exception_hand[40] = {0};
 isr_hand irq_hand[8] = {0};
 
 void set_g(void (*a)(void), uint8_t idx, uint8_t flg) {
@@ -117,6 +121,8 @@ void fill_idt() {
   set_g(_ex29, 29, EX);
   set_g(_ex30, 30, EX);
   set_g(_ex31, 31, EX);
+
+  set_g(c_switch2, 40, EX);
 
   set_g(_irq0, 32, EX);
   set_g(_irq1, 33, EX);

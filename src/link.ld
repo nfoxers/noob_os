@@ -11,8 +11,10 @@ SECTIONS
 
   . = 0x9400;
   .text : {
+    __text_start__ = .;
     *(.text.start)
     *(.text*)
+    __text_end__ = .;
   }
   .rodata : {
     *(.rodata*)

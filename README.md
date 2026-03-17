@@ -4,7 +4,8 @@ this is undoubtedly the most useless bootable software in the world, anyways jus
 
 currently the kernel is about 10KB in size (wow), has printf and part-working "shell" (unfun commands). nothing interesting, though
 
-it has too a fat12 driver in some way, it is the MOST COMPLEX part of the entire project!
+it has too a fat12 driver in some way, it is the MOST COMPLEX part of the entire project!  
+AND FINALLY COOPERATIVE MULTITASKING!!!! (greatest achievement of my LIFE)
 
 prerequisites you *must* have before compiling:
 ```
@@ -28,7 +29,7 @@ and yeah, this might be the current memory map:
 |              |
 |              | 
 | kernel       | 
-+--------------+ 0x9400 10.2 KB
++--------------+ 0x9400 11.1 KiB
 |              |
 | root dirs    | 
 +--------------+ 0x8600 3584 B

@@ -39,4 +39,6 @@ void zero_bss();
 void *kmalloc(size_t size);
 void stupidfree(size_t size);
 
+void set_page();
+
 #endif

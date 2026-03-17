@@ -38,24 +38,6 @@ u_tst:
 .jmp:
   jmp u_tst.jmp
 
-extern set_cr3
-
-set_cr3:
-  push ebp
-  mov ebp, esp
-
-  ; [ebp+8] = arg1
-  mov eax, [ebp+8]
-  mov cr3, eax
-
-  mov eax, cr0
-  or eax, 0x80000001
-  mov cr0, eax
-
-  mov esp, ebp
-  pop ebp
-  ret
-
 extern isr_handler
 extern irq_handler
 
@@ -144,6 +126,8 @@ _ex_ne 28
 _ex_ne 29
 _ex_e 30
 _ex_ne 31
+
+_ex_ne 40
 
 _irq 0
 _irq 1
