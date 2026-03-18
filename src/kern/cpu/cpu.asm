@@ -41,7 +41,28 @@ u_tst:
 extern isr_handler
 extern irq_handler
 
+struc regs
+  .edi resd 1 
+  .esi resd 1
+  .ebp resd 1
+  .esp resd 1
+  .ebx resd 1
+  .edx resd 1
+  .eax resd 1
+
+  .int resd 1
+  .err resd 1
+
+  .eip resd 1
+  .cs  resd 1
+  .efl resd 1
+  
+  .esp0 resd 1
+  .ss0 resd 1
+endstruc
+
 isr_stub:
+  pushad
   mov ax, 0x10
   mov es, ax
   mov ds, ax
@@ -49,14 +70,21 @@ isr_stub:
   mov gs, ax
   mov fs, ax
 
-  push esp
+  mov eax, esp ; eax = struct regs *
+  mov [eax + regs.esp], esp
+
+  push eax
   call isr_handler
   add esp, 4
+
+  popad
 
   add esp, 8
   iret
 
 irq_stub:
+  pushad
+
   mov ax, 0x10
   mov es, ax
   mov ds, ax
@@ -67,6 +95,8 @@ irq_stub:
   push esp
   call irq_handler
   add esp, 4
+
+  popad
 
   add esp, 8
   iret

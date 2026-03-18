@@ -30,7 +30,7 @@
 #define CASCADE_IRQ 2
 
 volatile struct idtr idtr_s = {0};
-volatile struct idt_gate idt_g[42];
+volatile struct idt_gate idt_g[50];
 
 extern void _ex0(void);
 extern void _ex1(void);
@@ -76,9 +76,7 @@ extern void _irq7(void);
 
 extern void _ex40(void);
 
-extern void c_switch2();
-
-isr_hand exception_hand[40] = {0};
+isr_hand exception_hand[41] = {0};
 isr_hand irq_hand[8] = {0};
 
 void set_g(void (*a)(void), uint8_t idx, uint8_t flg) {
@@ -122,7 +120,7 @@ void fill_idt() {
   set_g(_ex30, 30, EX);
   set_g(_ex31, 31, EX);
 
-  set_g(c_switch2, 40, EX);
+  set_g(_ex40, 40, EX);
 
   set_g(_irq0, 32, EX);
   set_g(_irq1, 33, EX);
@@ -181,9 +179,9 @@ void init_pic() {
 }
 
 void isr_handler(struct regs *r) {
-  printkf("interrupt at eip=%p, exc %d\n", r->eip, r->int_no);
   isr_hand e = exception_hand[r->int_no];
   if(!e) {
+    printkf("interrupt at eip=%p, exc %d\n", r->eip, r->int_no);
     printk("no exception handler! halting now...\n");
     asm volatile("cli");
     asm volatile("hlt");

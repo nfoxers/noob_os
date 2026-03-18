@@ -46,31 +46,32 @@ c_switch:
   
   iret
 
-extern cur
-extern next
+struc regs
+  .edi resd 1 
+  .esi resd 1
+  .ebp resd 1
+  .esp resd 1
+  .ebx resd 1
+  .edx resd 1
+  .eax resd 1
 
-struc task
-  .t_proc resd 1
-  .t_next resd 1
-  .t_esp resd 1
+  .eip resd 1
+  .cs  resd 1
+  .efl resd 1
+  
+  .esp0 resd 1
+  .ss0 resd 1
 endstruc
 
-global c_switch2
-c_switch2:
-  pushad
-
-  ; symbol cur = struct task **
-  mov eax, [cur] ; eax = struct task *
-  mov [eax + task.t_esp], esp ; (struct task *)->t_esp AHA YES!
-
-  mov eax, [next]
-  mov esp, [eax + task.t_esp]
-
-  mov edx, [cur]
-  mov [cur], eax
-  mov [next], edx
+global c_switch3
+c_switch3: ; esp+4 = &struct regs *prev, esp+8 = &struct regs *next
+  mov eax, [esp+4] ; eax = struct regs *
+  mov edx, [esp+8]
+  ;mov [eax + regs.esp], esp
+  mov esp, [edx + regs.esp] ; esp = (struct regs *)->esp
 
   popad
+  add esp, 8 ; err code
   iret
 
 global get_ef

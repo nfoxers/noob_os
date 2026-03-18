@@ -1,4 +1,6 @@
 #include "proc/proc.h"
+#include "cpu/idt.h"
+#include "mem/mem.h"
 #include "video/printf.h"
 
 #define NOPROC 10
@@ -9,85 +11,151 @@ extern uint8_t __text_end__;
 struct proc procs[NOPROC];
 struct user root;
 
-struct task tasks[NOPROC];
-struct task *cur;
-struct task *next;
+struct proc *volatile cur; 
+struct proc *volatile prev;
+struct proc *volatile next;
+
+struct proc *run_head;
 
 struct inode root_dir;
 
 extern struct file root_fd[NOFILE];
 
-void init_root_proc() {
-  procs[0].p_addr = 0x9400;
-  procs[0].p_stat = P_SRUN;
-  procs[0].p_pid = 0;
-  procs[0].p_ppid = 0;
-  procs[0].p_pri = 0;
-  procs[0].p_size = &__text_end__ - &__text_start__;
+extern uint32_t get_ef();
 
-  cur = &tasks[0];
-  cur->t_proc = &procs[0];
-  cur->t_next = &tasks[0];
+#define STACKSIZ 512 // this'll be enough
+
+uint8_t used_stacks[NOPROC];
+
+uint8_t alloc_esp(uint32_t *pointer) {
+  int i = 0;
+  for (; i < NOPROC; i++) {
+    if (!used_stacks[i]){
+      used_stacks[i] = 1;
+      *pointer       = (uint32_t)(i * (STACKSIZ + 1) + BSS_END + HEAP_SIZ);
+      return i;
+    }
+  }
+  return 0xff;
+}
+
+void dealloc_esp(uint8_t idx) {
+  used_stacks[idx] = 0;
+}
+
+volatile struct proc *find_freeproc() {
+  for (int i = 0; i < NOPROC; i++) {
+    if (procs[i].p_stat == P_SFREE) {
+      return &procs[i];
+    }
+  }
+  return NULL;
+}
+
+void rq_add(struct proc *p) {
+  if(!run_head) {
+    run_head = p;
+    p->p_next = p;
+    p->p_prev = p;
+    return;
+  }
+
+  struct proc *tail = run_head->p_prev;
+  tail->p_next = p;
+  p->p_prev = tail;
+
+  p->p_next = run_head;
+  run_head->p_prev = p;
+}
+
+void rq_remove(struct proc *p) {
+  if(p->p_next == p) {
+    run_head = NULL;
+  } else {
+    p->p_prev->p_next = p->p_next;
+    p->p_next->p_prev = p->p_prev;
+
+    if(run_head == p) run_head = p->p_next;
+  }
+
+  p->p_next = NULL;
+  p->p_prev = NULL;
+}
+
+void free_proc(struct proc *p) {
+  if(p == cur) {
+    cur = cur->p_next;
+  }
+  rq_remove(p);
+  p->p_stat = P_SFREE;
+}
+
+void block(struct proc *p) {
+  if(p == cur) {
+    cur = cur->p_next;
+  }
+  rq_remove(p);
+  p->p_stat = P_SSLEEP;
+}
+
+struct proc *alloc_proc(void (*f)()) {
+  for(int i = 0; i < NOPROC; i++) {
+    if(procs[i].p_stat == P_SFREE) {
+      procs[i].p_stat = P_SRUNABLE;
+
+      procs[i].p_addr = (uint32_t)f;
+      procs[i].p_pid = i;
+      procs[i].p_ppid = 0;
+      procs[i].p_user = &root;
+
+      uint32_t esp = 0x6210;
+      alloc_esp(&esp);
+      esp -= sizeof(struct regs);
+      struct regs *r = (struct regs *)esp;
+      r->esp = esp;
+      r->cs = 0x08;
+      r->eip = (uint32_t)f;
+      r->eflags = get_ef();
+
+      procs[i].p_frame = (struct regs*)esp;
+
+      return &procs[i];
+    }
+  }
+  return NULL;
+}
+
+extern void c_switch3(volatile struct regs *volatile prev, volatile struct regs *volatile next);
+
+void schedule_int(struct regs *cur_frame) {
+  if(!run_head) return;
+  struct proc *next = NULL;
+
+  if(!cur) {
+    next = run_head;
+    cur = run_head;
+    cur->p_frame = cur_frame;
+  } else if(cur == next) return;
+  next = cur->p_next;
+  prev = cur;
+  cur = next;
+
+  prev->p_frame = cur_frame;
+
+  c_switch3(prev->p_frame, next->p_frame);
+}
+
+void init_root_proc() {
+  struct proc *kproc = alloc_proc((void (*)())0x9400);
+  rq_add(kproc);
+  cur = kproc;
 
   printkf("kernel text size: %d\n", procs[0].p_size);
 
-  root.u_uid = 0;
-  root.u_rdir = &root_dir;
-  root.u_cdir = &root_dir;
-  root.u_gid = 0;
-  root.u_ofile = &root_fd;
-} 
+  root.u_uid   = 0;
+  root.u_rdir  = &root_dir;
+  root.u_cdir  = &root_dir;
+  root.u_gid   = 0;
 
-struct task *schedule() {
-  struct task *r = cur;
-  for(;;) {
-    r = r->t_next;
-    if(r->t_proc->p_stat == P_SRUN) break;
-  }
-  return r;
+  register_ex(schedule_int, 40);
 }
-
-extern uint32_t get_ef();
-extern void c_switch(uint32_t *esp1, uint32_t *esp2);
-extern void int40();
-
-void yield() {
-  next = schedule();
-  if(next != cur) {
-    //c_switch(&prev->p_saddr, &next->p_saddr);
-    int40();
-  }
-}
-
-void test_task() {
-  printkf("hello from task2\n");
-  yield();
-  while(1);
-}
-
-void alloc_task(void (*f)()) {
-  uint32_t *esp = (uint32_t*)0x6210; 
-  // INSERT CS HERE!
-  *(--esp) = get_ef(); // eflag
-  *(--esp) = 0x08; // cs
-  *(--esp) = (uint32_t)test_task;
-
-  *(--esp) = 0; // eax
-  *(--esp) = 0; // ecx
-  *(--esp) = 0; // edx
-  *(--esp) = 0; // ebx
-  *(--esp) = 0; // esp (IGNORED!)
-  *(--esp) = 0x6210; // ebp
-  *(--esp) = 0; // esi
-  *(--esp) = 0; // edi
-  
-  // regs hierr
-  procs[1].p_next = 0;
-  procs[1].p_stat = P_SRUN;
-  procs[1].p_saddr = (uint32_t)esp;
-  tasks[0].t_next = &tasks[1];
-  tasks[1].t_next = &tasks[0];
-  tasks[1].t_esp = (uint32_t)esp;
-  tasks[1].t_proc = &procs[1];
-}
-
