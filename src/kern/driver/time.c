@@ -57,3 +57,6 @@ void read_time(struct time_s *tim) {
     
   printkf("%02d:%02d:%02d (hh:mm:ss)\n", tim->hour, tim->min, tim->sec);
 }
+
+// todo: lapic timer and probably hpet or just pit if im lazy
+// AND preemptive (not sure if i spelled it right) multitasking

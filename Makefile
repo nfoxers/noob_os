@@ -2,7 +2,7 @@ AS = nasm
 CC = clang
 LD = ld.lld
 
-CFLAGS = -target i386-elf -g -Wall -Wextra -ffreestanding -m32 -Iinclude -Oz -MMD -MP -mno-sse -msoft-float -march=i486
+CFLAGS = -target i386-elf -g -Wall -Wextra -ffreestanding -fno-pic -m32 -Iinclude -Oz -MMD -MP -mno-sse -msoft-float -march=i686
 LDFLAGS = -m elf_i386 -T src/link.ld
 
 SRC = $(shell find ./src/kern -name '*.c' -o -name '*.asm')
@@ -57,3 +57,4 @@ debug: bin/os.img
 size: tools/chksiz.py
 	@echo --------------
 	@python3 $<
+	@llvm-size build/kern.elf

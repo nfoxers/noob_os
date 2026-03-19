@@ -5,8 +5,11 @@
 
 void outb(uint16_t a, uint8_t d);
 void outw(uint16_t a, uint16_t d);
-uint8_t inb(uint16_t a);
+void outl(uint16_t a, uint32_t d);
+
+uint8_t  inb(uint16_t a);
 uint16_t inw(uint16_t a);
+uint32_t inl(uint16_t a);
 
 static inline void io_wait(void) { outb(0x80, 0); }
 

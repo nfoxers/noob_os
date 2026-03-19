@@ -93,10 +93,16 @@ struct proc {
   struct user *p_user;
 };
 
-extern void     int40();
+extern void int40();
+extern void int41();
+
+void general_switch();
+
+struct proc *alloc_proc(void (*f)(), uint16_t cs);
 
 void init_root_proc();
-struct proc *alloc_proc(void (*f)());
 void rq_add(struct proc *p);
+
+void exit_cur();
 
 #endif

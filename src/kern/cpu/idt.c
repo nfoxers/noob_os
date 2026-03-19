@@ -1,35 +1,36 @@
 #include "cpu/idt.h"
 #include "io.h"
-#include "video/video.h"
 #include "video/printf.h"
+#include "video/video.h"
 
-#define EX 0x8E
-#define TR 0x8F
+#define EX   0x8E
+#define TR   0x8F
+#define EX_U 0xEE
 
-#define PIC1 0x20
-#define PIC2 0xA0
+#define PIC1         0x20
+#define PIC2         0xA0
 #define PIC1_COMMAND PIC1
-#define PIC1_DATA (PIC1 + 1)
+#define PIC1_DATA    (PIC1 + 1)
 #define PIC2_COMMAND PIC2
-#define PIC2_DATA (PIC2 + 1)
+#define PIC2_DATA    (PIC2 + 1)
 
 #define PIC_EOI 0x20
 
-#define ICW1_ICW4 0x01
-#define ICW1_SINGLE 0x02
+#define ICW1_ICW4      0x01
+#define ICW1_SINGLE    0x02
 #define ICW1_INTERVAL4 0x04
-#define ICW1_LEVEL 0x08
-#define ICW1_INIT 0x10
+#define ICW1_LEVEL     0x08
+#define ICW1_INIT      0x10
 
-#define ICW4_8086 0x01
-#define ICW4_AUTO 0x02
-#define ICW4_BUF_SLAVE 0x08
+#define ICW4_8086       0x01
+#define ICW4_AUTO       0x02
+#define ICW4_BUF_SLAVE  0x08
 #define ICW4_BUF_MASTER 0x0C
-#define ICW4_SFNM 0x10
+#define ICW4_SFNM       0x10
 
 #define CASCADE_IRQ 2
 
-volatile struct idtr idtr_s = {0};
+volatile struct idtr     idtr_s = {0};
 volatile struct idt_gate idt_g[50];
 
 extern void _ex0(void);
@@ -77,13 +78,13 @@ extern void _irq7(void);
 extern void _ex40(void);
 
 isr_hand exception_hand[41] = {0};
-isr_hand irq_hand[8] = {0};
+isr_hand irq_hand[8]        = {0};
 
 void set_g(void (*a)(void), uint8_t idx, uint8_t flg) {
-  idt_g[idx].flag = flg;
-  idt_g[idx].seg = 0x08;
+  idt_g[idx].flag      = flg;
+  idt_g[idx].seg       = 0x08;
   idt_g[idx].offsetlow = (uint32_t)a & 0xffff;
-  idt_g[idx].offsethi = ((uint32_t)a >> 16) & 0xffff;
+  idt_g[idx].offsethi  = ((uint32_t)a >> 16) & 0xffff;
 }
 
 void fill_idt() {
@@ -120,7 +121,8 @@ void fill_idt() {
   set_g(_ex30, 30, EX);
   set_g(_ex31, 31, EX);
 
-  set_g(_ex40, 40, EX);
+  set_g(_ex40, 40, EX_U);
+  set_g(_ex40, 41, EX); // same handler for dpl 0
 
   set_g(_irq0, 32, EX);
   set_g(_irq1, 33, EX);
@@ -135,9 +137,9 @@ void fill_idt() {
 void set_idtr() {
   fill_idt();
   idtr_s.addr = (uint32_t)idt_g;
-  idtr_s.siz = sizeof(idt_g) - 1;
+  idtr_s.siz  = sizeof(idt_g) - 1;
 
-  asm volatile("lidt (%0)" ::"r"(&idtr_s) : "memory");
+  asm volatile("lidt (%0)" :: "r"(&idtr_s) : "memory");
 
   printk("interrupt ok\n");
 }
@@ -147,8 +149,6 @@ void pic_sm(uint8_t line) { outb(PIC1_DATA, inb(PIC1_DATA) | (1 << line)); }
 void pic_cm(uint8_t line) { outb(PIC1_DATA, inb(PIC1_DATA) & ~(1 << line)); }
 
 void pic_eoi() { outb(PIC1_COMMAND, PIC_EOI); }
-
-
 
 void pic_remap(int offset1, int offset2) {
   outb(PIC1_COMMAND, ICW1_INIT | ICW1_ICW4);
@@ -180,22 +180,23 @@ void init_pic() {
 
 void isr_handler(struct regs *r) {
   isr_hand e = exception_hand[r->int_no];
-  if(!e) {
+  if (!e) {
     printkf("interrupt at eip=%p, exc %d\n", r->eip, r->int_no);
     printk("no exception handler! halting now...\n");
     asm volatile("cli");
     asm volatile("hlt");
-  } 
+  }
   e(r);
   return;
 }
 
 void irq_handler(struct regs *r) {
-  //printkf("irq exception %d\n", r->int_no - 32);
-  
-  if(r->int_no < 32 || r->int_no >= 40) return;
+  // printkf("irq exception %d\n", r->int_no - 32);
+
+  if (r->int_no < 32 || r->int_no >= 40)
+    return;
   isr_hand e = irq_hand[r->int_no - 32];
-  if(!e) {
+  if (!e) {
     printk("no irq handler! unhandling irq...\n");
     return;
   }

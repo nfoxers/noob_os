@@ -74,6 +74,7 @@ uint8_t parse_char(uint8_t scan) {
 }
 
 void kbd_handler(struct regs *r) {
+  (void)r;
   uint8_t scan = inb(0x60);
   uint8_t ch = parse_char(scan);
 

@@ -16,27 +16,21 @@ flush_gdt:
   ltr ax 
   ret
 
-usermode:
-  mov ax, (4 * 8) | 3
-  mov ds, ax
-  mov es, ax
-  mov fs, ax
-  mov gs, ax
+global chk_cpuid
+chk_cpuid:
+  pushfd
+  pushfd
 
-  mov eax, esp
-  push dword (4 * 8) | 3
+  xor dword [esp], 0x00200000
+  popfd
+  pushfd
 
-  push eax
-  pushf
-  push dword (3 * 8) | 3
-  
-  push u_tst
-  iret
+  pop eax
+  xor eax, [esp]
 
-u_tst:
-  cli
-.jmp:
-  jmp u_tst.jmp
+  popfd
+  and eax, 0x00200000 
+  ret ; zero = no cpuid :sad:
 
 extern isr_handler
 extern irq_handler
@@ -63,6 +57,7 @@ endstruc
 
 isr_stub:
   pushad
+
   mov ax, 0x10
   mov es, ax
   mov ds, ax

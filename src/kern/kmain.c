@@ -1,7 +1,9 @@
+#include "cpu/ccpu.h"
 #include "cpu/gdt.h"
 #include "cpu/idt.h"
 #include "driver/fat12.h"
 #include "driver/keyboard.h"
+#include "driver/pci.h"
 #include "driver/time.h"
 #include "mem/mem.h"
 #include "proc/proc.h"
@@ -10,14 +12,6 @@
 #include "video/video.h"
 
 extern void enditall();
-extern void usermode();
-
-void tsk() {
-  while (1) {
-    printk("hi from task9\n");
-    int40();
-  }
-}
 
 void kmain(void) {
   zero_bss();
@@ -26,11 +20,11 @@ void kmain(void) {
 
   init_root_proc();
 
-  printk("trying to set up the idt... ");
+  printk("setting up the idt... ");
   set_idtr();
-  printk("trying to initialize the pic... ");
+  printk("initializing the pic... ");
   init_pic();
-  printk("trying to intialize fat12... ");
+  printk("initializing fat12... ");
   init_fs();
 
   STI;
@@ -40,16 +34,16 @@ void kmain(void) {
   printk("setting up the gdt... ");
   set_gdt();
 
-  printk("time: ");
+  check_capat();
+
+  printk("initializing apic... ");
+  set_apic();
+
+  // pci_enumerate(); //uncomment when gefixiert
+
+  printk("time of boot (gmt): ");
   struct time_s s;
   read_time(&s);
-
-  struct proc *p = alloc_proc(tsk);
-  rq_add(p);
-
-  int40();
-  int40();
-  // usermode();
 
   static char buf[128];
   static char argv[8][16];
@@ -103,9 +97,6 @@ void kmain(void) {
   // todo: again, gdt (uh done), serial (for why), memory safety, etc
   // todo2: FIX fat12 driver (oh lord)
   // todo3: FIX multitasking, and SYSCALLS!!!!!!!
-
-  while (1)
-    ;
 
   enditall();
 

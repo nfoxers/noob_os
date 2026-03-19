@@ -3,8 +3,10 @@
 
 #include "stdint.h"
 
-#define CLI { asm volatile("cli"); }
-#define STI { asm volatile("sti"); }
+#define CLI \
+  { asm volatile("cli"); }
+#define STI \
+  { asm volatile("sti"); }
 
 struct idtr {
   uint16_t siz;
@@ -14,8 +16,8 @@ struct idtr {
 struct idt_gate {
   uint16_t offsetlow;
   uint16_t seg;
-  uint8_t res;
-  uint8_t flag;
+  uint8_t  res;
+  uint8_t  flag;
   uint16_t offsethi;
 } __attribute__((packed));
 
@@ -28,6 +30,9 @@ struct regs {
   uint32_t eip;
   uint32_t cs;
   uint32_t eflags;
+
+  uint32_t esp0;
+  uint32_t ss;
 } __attribute__((packed));
 
 typedef void (*isr_hand)(struct regs *r);
