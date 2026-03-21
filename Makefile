@@ -5,12 +5,13 @@ LD = ld.lld
 CFLAGS = -target i386-elf -g -Wall -Wextra -ffreestanding -fno-pic -m32 -Iinclude -Oz -MMD -MP -mno-sse -msoft-float -march=i686
 LDFLAGS = -m elf_i386 -T src/link.ld
 
+QMFLAGS = -netdev user,id=net0 -device rtl8139,netdev=net0
+
 SRC = $(shell find ./src/kern -name '*.c' -o -name '*.asm')
 OBJ = $(patsubst ./src/kern/%.c,./build/kern/%.o, $(SRC))
 OBJ := $(patsubst ./src/kern/%.asm,./build/kern/%.o, $(OBJ))
 
 DEP := $(OBJ:.o=.d)
-
 
 .PHONY: clean run debug size
 
@@ -49,10 +50,10 @@ clean:
 	rm -rf build bin
 
 run: bin/os.img
-	qemu-system-i386 -drive format=raw,file=$<
+	qemu-system-i386 $(QMFLAGS) -drive format=raw,file=$<
 	
 debug: bin/os.img
-	qemu-system-i386 -s -S -drive format=raw,file=$<
+	qemu-system-i386 -s -S $(QMFLAGS) -drive format=raw,file=$<
 
 size: tools/chksiz.py
 	@echo --------------

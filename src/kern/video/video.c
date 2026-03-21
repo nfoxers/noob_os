@@ -9,6 +9,11 @@ extern void clear();
 
 uint16_t cursor = 0;
 
+static uint8_t c_att = 0x00;
+static uint8_t vflag = 0;
+
+#define VF_ESCAPE 0x01
+
 void setcursor() {
   outb(0x3d4, 0x0f);
   outb(0x3d5, (uint8_t)cursor & 0xff);
@@ -39,14 +44,31 @@ void backspace() {
   setcursor();
 }
 
+int kisprint(int c) {
+  if((c >= ' ') && (c <= '~'))
+    return 1;
+  return 0;
+}
+
 void putchr(char c) {
+
+  if(vflag & VF_ESCAPE) {
+    // todo: proper ansi escape handling
+    c_att = c;
+    vflag &= ~VF_ESCAPE;
+    return;
+  }
+
   if (c == '\n') {
     cursor += 80 - (cursor % 80);
   } else if (c == '\b') {
     backspace();
-  } else {
-    VGA[cursor * 2] = c;
-    VGA[cursor * 2 + 1] = 0x0f;
+  } else if (c == '\e') {
+    vflag |= VF_ESCAPE;
+    return;
+  } else if(kisprint(c)){
+    VGA[cursor * 2]     = c;
+    VGA[cursor * 2 + 1] = c_att;
     cursor++;
   }
 
@@ -72,7 +94,7 @@ void scroll_n(uint8_t n) {
   setcursor();
 }
 
-void clr_scr() {  
+void clr_scr() {
   cursor = 0;
   setcursor();
   clear();
@@ -80,5 +102,6 @@ void clr_scr() {
 
 void init_video() {
   readcursor();
+  c_att = 0x0f;
   printkf("video initialized\n");
 }

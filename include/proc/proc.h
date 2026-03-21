@@ -103,6 +103,8 @@ struct proc *alloc_proc(void (*f)(), uint16_t cs);
 void init_root_proc();
 void rq_add(struct proc *p);
 
+void spawn_proc(void (*f)(), uint16_t cs);
+
 void exit_cur();
 
 #endif

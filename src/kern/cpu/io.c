@@ -27,7 +27,7 @@ uint16_t inw(uint16_t a) {
 }
 
 uint32_t inl(uint16_t a) {
-  uint16_t ret;
+  uint32_t ret;
   asm volatile("inl %w1, %k0" : "=a"(ret) : "Nd"(a) : "memory");
   return ret;
 }

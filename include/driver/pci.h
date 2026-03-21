@@ -4,5 +4,6 @@
 #include "stdint.h"
 
 void pci_enumerate();
+void pci_init();
 
 #endif

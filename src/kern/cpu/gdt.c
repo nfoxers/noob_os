@@ -1,7 +1,6 @@
 #include "cpu/gdt.h"
 #include "cpu/idt.h"
 #include "mem/mem.h"
-#include "video/video.h"
 #include <stddef.h>
 #include <stdint.h>
 
@@ -38,7 +37,5 @@ void set_gdt() {
   CLI;
   asm volatile("lgdt (%0)" ::"r"(&gdtr) : "memory");
   flush_gdt();
-  STI;
-
-  printk("gdt is ok\n");
+  //STI; // its gonna be called before any interrupt uses anyway 
 }

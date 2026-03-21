@@ -87,6 +87,9 @@ irq_stub:
   mov gs, ax
   mov fs, ax
 
+  mov eax, esp ; eax = struct regs *
+  mov [eax + regs.esp], esp
+
   push esp
   call irq_handler
   add esp, 4

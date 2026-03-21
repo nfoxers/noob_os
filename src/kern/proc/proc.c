@@ -139,8 +139,9 @@ void schedule_int(struct regs *cur_frame) {
     return;
 
   if (!cur) {
-    next         = run_head;
-    cur          = run_head;
+    next = run_head;
+    cur  = run_head;
+
     cur->p_frame = cur_frame;
   } else if (cur == cur->p_next)
     return;
@@ -149,16 +150,19 @@ void schedule_int(struct regs *cur_frame) {
   cur  = next;
 
   prev->p_frame = cur_frame;
-
+  pic_eoi();
   c_switch3(prev->p_frame, next->p_frame);
 }
 
 void general_switch() {
-  volatile struct regs *r = cur->p_frame;
-  if (r->cs == CS_U) {
-    int40();
-  } else
-    int41();
+  int40();
+}
+
+void spawn_proc(void (*f)(), uint16_t cs) {
+  CLI; // be advised this only works on kernel mode
+  struct proc *p = alloc_proc(f, cs);
+  rq_add(p);
+  STI;
 }
 
 void init_root_proc() {
@@ -166,7 +170,9 @@ void init_root_proc() {
   rq_add(kproc);
   cur = kproc;
 
-  printkf("kernel text size: %d\n", procs[0].p_size);
+  kproc->p_size = &__text_end__ - &__text_start__;
+
+  printkf("kernel text size: %d B\n", procs[0].p_size);
 
   root.u_uid  = 0;
   root.u_rdir = &root_dir;

@@ -90,7 +90,7 @@ void set_g(void (*a)(void), uint8_t idx, uint8_t flg) {
 void fill_idt() {
   set_g(_ex0, 0, EX);
   set_g(_ex1, 1, TR);
-  set_g(_ex2, 2, EX);
+  set_g(_ex40, 2, EX);
   set_g(_ex3, 3, TR);
   set_g(_ex4, 4, TR);
   set_g(_ex5, 5, EX);
@@ -122,8 +122,7 @@ void fill_idt() {
   set_g(_ex31, 31, EX);
 
   set_g(_ex40, 40, EX_U);
-  set_g(_ex40, 41, EX); // same handler for dpl 0
-
+  
   set_g(_irq0, 32, EX);
   set_g(_irq1, 33, EX);
   set_g(_irq2, 34, EX);
@@ -140,8 +139,6 @@ void set_idtr() {
   idtr_s.siz  = sizeof(idt_g) - 1;
 
   asm volatile("lidt (%0)" :: "r"(&idtr_s) : "memory");
-
-  printk("interrupt ok\n");
 }
 
 void pic_sm(uint8_t line) { outb(PIC1_DATA, inb(PIC1_DATA) | (1 << line)); }
@@ -175,7 +172,6 @@ void pic_remap(int offset1, int offset2) {
 
 void init_pic() {
   pic_remap(0x20, 0x28);
-  printk("pic ok\n");
 }
 
 void isr_handler(struct regs *r) {

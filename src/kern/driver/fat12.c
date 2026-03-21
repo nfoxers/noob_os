@@ -42,8 +42,6 @@ void init_fs() {
   fsinfo.data_start = fsinfo.root_start + fsinfo.root_sectors;
   fsinfo.data_addr = fsinfo.data_start * 512 + 0x7c00;
   fsinfo.data_sectors = BS->total_sec - fsinfo.data_start;
-
-  printk("fs init ok\n");
 }
 
 uint16_t fat_value(uint16_t cluster) {

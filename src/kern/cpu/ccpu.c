@@ -8,7 +8,7 @@ void check_capat() {
   uint32_t tmp;
   __get_cpuid(1, &tmp, &tmp, &c_capat.ecx_leaf1, &c_capat.edx_leaf1);
 
-  printk("cpu extensions: ");
+  printk("cpu extensions: \e\x0e");
 
   uint32_t edx = c_capat.edx_leaf1;
   if (edx & bit_FPU) {
@@ -27,7 +27,7 @@ void check_capat() {
     printk("sse ");
   }
   // todo: more leafes
-  printk("\n");
+  printk("\e\x0f\n");
 }
 
 void rdmsr(uint32_t msr, uint32_t *lo, uint32_t *hi) {
@@ -72,6 +72,4 @@ void set_apic() {
   set_apic_base(get_apic_base());
   apic_write(0xf0, apic_read(0xf0) | 0x100);
   // todo: set ioapic (qemu SOMEHOW doesnt give me acpi) and interrupts via apic
-
-  printk("apic ok\n");
 }
