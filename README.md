@@ -56,3 +56,8 @@ and this might be the current memory map:
 nota bene: every process other than the root proc gets 512B of stack space
 
 fun fact: i specifically used `clang` and the llvm toolchain instead of a gcc cross compiler so that i can compile the project on my mobile phone (via termux), where there cross compilers are the hardest and most painful to install!
+
+### legal notice
+this is still a hobby OS project, it doesn't store, process, or use any kind of user data. it is also void of and does not provide accounts, services, or content.
+
+so things like age verification / platform regulation (see California AB-1043 & Brazil Law No. 15.211/2025) doesn't really apply "in my opinion". therefore, you are still allowed to locally distribute this software from within these region, but be aware that any unforeseeable legal consequences... can *probably* befall you.
