@@ -379,7 +379,7 @@ int sys_open(const char *fname, uint16_t flags) {
   struct inode *in = kmalloc(sizeof(struct inode));
   if(fat_lookup(fname, in) && !(flags & O_CREAT)) {
     printkf("err: '%s': no such file\n", fname);
-    stupidfree(sizeof(struct inode));
+    kfree(in);
     return 0;
   } else if(flags & O_CREAT) {
     fat_create(fname, in);

@@ -12,12 +12,14 @@
 #include "video/printf.h"
 #include "video/video.h"
 #include "proc/shell.h"
+#include <stdarg.h>
 
 extern void enditall();
 
+volatile int counter1 = 0;
+
 void testfunc() {
-  while(1)
-    printkf("hi, world!\n");
+  printkf("why doesnt preemptive work\n");
   exit_cur();
 }
 
@@ -44,14 +46,20 @@ void kmain(void) {
   
   print_init("pit", "intializing the pit...", 0);
   init_pit(1);
+  print_init("pci", "initializing pci devices...", 0);
+  pci_init();
+  print_init("mem", "initializing the dynamic allocator...", 0);
+  kmalloc_init();
 
   check_capat();
-  pci_init();
-
   printk("time of boot: ");
   struct time_s s;
   read_time(&s);
-    
+  
+  CLI;
+  spawn_proc(testfunc, CS_K);
+
+  STI;
   shell();
 
   // todo: again, gdt (uh done), serial (for why), memory safety, etc

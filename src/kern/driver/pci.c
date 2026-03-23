@@ -231,9 +231,9 @@ uint8_t rxbf[1024];
 
 void rtl8139_init(struct pci_hdr *hdr, uint32_t bus, uint32_t dev) {
   // todo: implement network driver when not lazy
+  print_info("rtl", 0, "irqline: %d", hdr->tsh.dev.iline);
   setbit_cmd(2, bus, dev);
   uint16_t devaddr = hdr->tsh.dev.bar[0] & 0xfffc;
-  printkf("da: %x\n", devaddr);
   outb(devaddr + 0x52, 0x00);
   outb(devaddr + 0x37, 0x10);
   while ((inb(devaddr + 0x37) & 0x10) != 0)
@@ -242,5 +242,4 @@ void rtl8139_init(struct pci_hdr *hdr, uint32_t bus, uint32_t dev) {
   outw(devaddr + 0x3C, 0x0005);
   outl(devaddr + 0x44, 0xf | (1 << 7));
   outb(devaddr + 0x37, 0x0c);
-  printkf("rtl minit\n");
 }

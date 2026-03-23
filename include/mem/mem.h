@@ -8,6 +8,10 @@
 
 #define HEAP_SIZ 1024
 
+// y'know what, i surrender living off below 1MB. a cool kernel can't just only use 25KB of memory (b)
+#define EXT_MEM_BASE 0x00100000
+#define EXT_MEM_SIZ ((size_t)1 << 20) // 1MB o' size
+
 extern uint8_t __bss_start__;
 extern uint8_t __bss_end__;
 
@@ -39,7 +43,8 @@ char   *kstrrchr(const char *s, int c);
 
 void zero_bss();
 
+void  kmalloc_init();
 void *kmalloc(size_t size);
-void  stupidfree(size_t size);
+void  kfree(void *ptr);
 
 #endif

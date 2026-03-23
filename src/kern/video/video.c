@@ -66,7 +66,7 @@ void putchr(char c) {
   } else if (c == '\e') {
     vflag |= VF_ESCAPE;
     return;
-  } else if(kisprint(c)){
+  } else if(1 || kisprint(c)){
     VGA[cursor * 2]     = c;
     VGA[cursor * 2 + 1] = c_att;
     cursor++;

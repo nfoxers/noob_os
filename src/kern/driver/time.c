@@ -54,11 +54,13 @@ void read_time(struct time_s *tim) {
 uint32_t          pit_freq;
 volatile uint32_t counter;
 
+void general_switch();
+
 void timer_handler(struct regs *r) {
   counter++;
   pic_eoi();
-
-  // general_switch(); // uncomment when fixed
+  
+  //general_switch(); // uncomment when fixed
 }
 
 uint32_t gettime(uint32_t *ms) {

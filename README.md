@@ -2,7 +2,7 @@
 ### do not try at home
 this is undoubtedly the most useless bootable software in the world, anyways just run `make` (make sure `nasm` is installed on your system) and bin/os.img should pop up. in addition, `make run` should run the executable (using qemu-system-i386)
 
-currently the kernel is about 12KB in size (wow), has printf and part-working "shell" (unfun commands). nothing interesting, though  
+currently the kernel is about 15KB in size (NOT so wow), has printf and part-working "shell" (unfun commands). nothing interesting, though  
 
 *i must stress that this hobby project does not have and will never have any production usability*
 
@@ -22,7 +22,8 @@ while others, `find`, `truncate`, et cetera are assumed to already be on your sy
 
 and this might be the current memory map:
 ```
-+--------------+
+low memory
++==============+ 0x000FFFFF
 |              |
 | other data   |
 +- - - - - - - + ????
@@ -30,7 +31,7 @@ and this might be the current memory map:
 |              |
 |              | 
 | kernel       | 
-+--------------+ 0x9400 12.2 KiB
++--------------+ 0x9400 15.0 KiB
 |              |
 | root dirs    | 
 +--------------+ 0x8600 3584 B
@@ -40,18 +41,30 @@ and this might be the current memory map:
 | bootstrap    | 
 +--------------+ 0x7c00 512 B
 | kernel stack | 
-+- - - - - - - +
++- - - - - - - + ????
 |              |
 | proc stack   |
-+- - - - - - - + ????
-| kernel heap  | 
 +--------------+ __bss_end__
 |              |
 | BSS segment  | 
 +--------------+ 0x0500 30,4 KB
 | BIOS stuff   | 
-+--------------+ 0x0000 1280 B
++==============+ 0x0000 1280 B
 ```
+```
+high memory
++==============+ ????
+|              |
+| stuff?       |
++- - - - - - - + 0x00200000
+|              |
+|              |
+|              |
+| kernel heap  |
++==============+ 0x00100000 1 MiB
+
+```
+
 
 nota bene: every process other than the root proc gets 512B of stack space
 
