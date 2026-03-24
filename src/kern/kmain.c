@@ -20,6 +20,11 @@ volatile int counter1 = 0;
 
 void testfunc() {
   printkf("why doesnt preemptive work\n");
+  while(1) {
+    STI;
+    counter1++;
+    //printkf("h");
+  }
   exit_cur();
 }
 
@@ -57,7 +62,7 @@ void kmain(void) {
   read_time(&s);
   
   CLI;
-  spawn_proc(testfunc, CS_K);
+  //spawn_proc(testfunc, CS_K);
 
   STI;
   shell();

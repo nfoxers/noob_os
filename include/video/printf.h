@@ -15,5 +15,6 @@ int snprintkf(char *buf, size_t siz, const char *fmt, ...);
 
 void print_init(const char *f, const char *s, int rc);
 void print_info(const char *s, int mto, const char *fmt, ...);
+void print_error(const char *s, int mto, const char *fmt, ...);
 
 #endif

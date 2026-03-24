@@ -60,7 +60,7 @@ void timer_handler(struct regs *r) {
   counter++;
   pic_eoi();
   
-  //general_switch(); // uncomment when fixed
+  general_switch(); // uncomment when fixed
 }
 
 uint32_t gettime(uint32_t *ms) {

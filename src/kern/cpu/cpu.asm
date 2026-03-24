@@ -165,4 +165,12 @@ _irq 4
 _irq 5
 _irq 6
 _irq 7
+
 _irq 8
+_irq 9
+_irq 10
+_irq 11
+_irq 12
+_irq 13
+_irq 14
+_irq 15

@@ -75,10 +75,19 @@ extern void _irq5(void);
 extern void _irq6(void);
 extern void _irq7(void);
 
+extern void _irq8(void);
+extern void _irq9(void);
+extern void _irq10(void);
+extern void _irq11(void);
+extern void _irq12(void);
+extern void _irq13(void);
+extern void _irq14(void);
+extern void _irq15(void);
+
 extern void _ex40(void);
 
 isr_hand exception_hand[41] = {0};
-isr_hand irq_hand[8]        = {0};
+isr_hand irq_hand[16]       = {0};
 
 void set_g(void (*a)(void), uint8_t idx, uint8_t flg) {
   idt_g[idx].flag      = flg;
@@ -90,7 +99,7 @@ void set_g(void (*a)(void), uint8_t idx, uint8_t flg) {
 void fill_idt() {
   set_g(_ex0, 0, EX);
   set_g(_ex1, 1, TR);
-  set_g(_ex40, 2, EX);
+  set_g(_ex2, 2, EX);
   set_g(_ex3, 3, TR);
   set_g(_ex4, 4, TR);
   set_g(_ex5, 5, EX);
@@ -122,7 +131,7 @@ void fill_idt() {
   set_g(_ex31, 31, EX);
 
   set_g(_ex40, 40, EX_U);
-  
+
   set_g(_irq0, 32, EX);
   set_g(_irq1, 33, EX);
   set_g(_irq2, 34, EX);
@@ -131,6 +140,15 @@ void fill_idt() {
   set_g(_irq5, 37, EX);
   set_g(_irq6, 38, EX);
   set_g(_irq7, 39, EX);
+
+  // set_g(_irq8, 40, EX); // sorry, try again later!
+  set_g(_irq9, 41, EX);
+  set_g(_irq10, 42, EX);
+  set_g(_irq11, 43, EX);
+  set_g(_irq12, 44, EX);
+  set_g(_irq13, 45, EX);
+  set_g(_irq14, 46, EX);
+  set_g(_irq15, 47, EX);
 }
 
 void set_idtr() {
@@ -138,14 +156,27 @@ void set_idtr() {
   idtr_s.addr = (uint32_t)idt_g;
   idtr_s.siz  = sizeof(idt_g) - 1;
 
-  asm volatile("lidt (%0)" :: "r"(&idtr_s) : "memory");
+  asm volatile("lidt (%0)" ::"r"(&idtr_s) : "memory");
 }
 
-void pic_sm(uint8_t line) { outb(PIC1_DATA, inb(PIC1_DATA) | (1 << line)); }
+void pic_sm(uint8_t line) {
+  if (line < 8) {
+    outb(PIC1_DATA, inb(PIC1_DATA) | (1 << line));
+    return;
+  }
+  outb(PIC2_DATA, inb(PIC2_DATA) | (1 << (line - 8)));
+}
 
-void pic_cm(uint8_t line) { outb(PIC1_DATA, inb(PIC1_DATA) & ~(1 << line)); }
+void pic_cm(uint8_t line) {
+  if (line < 8) {
+    outb(PIC1_DATA, inb(PIC1_DATA) & ~(1 << line));
+    return;
+  }
+  outb(PIC2_DATA, inb(PIC2_DATA) & ~(1 << (line - 8)));
+}
 
 void pic_eoi() { outb(PIC1_COMMAND, PIC_EOI); }
+void pic_eoi2() { outb(PIC2_COMMAND, PIC_EOI); }
 
 void pic_remap(int offset1, int offset2) {
   outb(PIC1_COMMAND, ICW1_INIT | ICW1_ICW4);
@@ -189,7 +220,7 @@ void isr_handler(struct regs *r) {
 void irq_handler(struct regs *r) {
   // printkf("irq exception %d\n", r->int_no - 32);
 
-  if (r->int_no < 32 || r->int_no >= 40)
+  if (r->int_no < 32 || r->int_no >= 48)
     return;
   isr_hand e = irq_hand[r->int_no - 32];
   if (!e) {

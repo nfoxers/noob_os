@@ -5,7 +5,7 @@ LD = ld.lld
 CFLAGS = -target i386-elf -g -Wall -Wextra -ffreestanding -fno-pic -m32 -Iinclude -Oz -MMD -MP -mno-sse -msoft-float -march=i686
 LDFLAGS = -m elf_i386 -T src/link.ld
 
-QMFLAGS = -netdev user,id=net0 -device rtl8139,netdev=net0
+QMFLAGS = -netdev user,id=net0 -device rtl8139,netdev=net0 
 
 SRC = $(shell find ./src/kern -name '*.c' -o -name '*.asm')
 OBJ = $(patsubst ./src/kern/%.c,./build/kern/%.o, $(SRC))
