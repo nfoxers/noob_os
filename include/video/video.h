@@ -11,6 +11,10 @@ void putchr(char c);
 void clr_scr();
 void init_video();
 
+void vflush();
+void vscroll_down();
+void vscroll_up();
+
 int kisprint(int);
 
 #endif

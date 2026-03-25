@@ -26,6 +26,9 @@ void check_capat() {
   if (edx & bit_SSE) {
     printk("sse ");
   }
+  if(edx & bit_MMX) {
+    printk("mmx ");
+  }
   // todo: more leafes
   printk("\e\x0f\n");
 }

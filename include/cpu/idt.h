@@ -22,6 +22,7 @@ struct idt_gate {
 } __attribute__((packed));
 
 struct regs {
+  uint32_t ds, es, fs, gs;
   uint32_t edi, esi, ebp, esp, ebx, edx, ecx, eax;
 
   uint32_t int_no;
@@ -36,6 +37,8 @@ struct regs {
 } __attribute__((packed));
 
 typedef void (*isr_hand)(struct regs *r);
+
+#define SYS_INTNO 48
 
 void set_idtr();
 void init_pic();

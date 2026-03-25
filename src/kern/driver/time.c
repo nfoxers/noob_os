@@ -1,6 +1,7 @@
 #include "driver/time.h"
 #include "cpu/idt.h"
 #include "io.h"
+#include "proc/proc.h"
 #include "video/printf.h"
 #include "video/video.h"
 
@@ -60,7 +61,8 @@ void timer_handler(struct regs *r) {
   counter++;
   pic_eoi();
   
-  general_switch(); // uncomment when fixed
+  // it is fixed now Ü
+  schedule();
 }
 
 uint32_t gettime(uint32_t *ms) {
@@ -79,6 +81,7 @@ void init_pit(uint32_t freq) {
     pit_freq = PIT_FREQ / div;
   }
 
+  print_info("frq", 0, "actual pit freq: \e\x09%d mHz\e\x0f", PIT_FREQ * 1000 / div);
   outb(PIT_COMM, 0x36);
   outb(PIT_DATA, div & 0xff);
   outb(PIT_DATA, (div >> 8) & 0xff);

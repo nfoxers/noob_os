@@ -13,6 +13,7 @@
 #include "video/video.h"
 #include "proc/shell.h"
 #include <stdarg.h>
+#include "driver/serial.h"
 
 extern void enditall();
 
@@ -21,7 +22,7 @@ volatile int counter1 = 0;
 void testfunc() {
   printkf("why doesnt preemptive work\n");
   while(1) {
-    STI;
+    //STI;
     counter1++;
     //printkf("h");
   }
@@ -30,6 +31,7 @@ void testfunc() {
 
 void kmain(void) {
   zero_bss();
+  kmalloc_init();
   init_video();
   printk("hello from C!\n");
 
@@ -53,8 +55,9 @@ void kmain(void) {
   init_pit(1);
   print_init("pci", "initializing pci devices...", 0);
   pci_init();
-  print_init("mem", "initializing the dynamic allocator...", 0);
-  kmalloc_init();
+
+  print_init("srl", "initializing serial...", init_serial(9600));
+  smbios_scan();
 
   check_capat();
   printk("time of boot: ");
@@ -62,12 +65,12 @@ void kmain(void) {
   read_time(&s);
   
   CLI;
-  //spawn_proc(testfunc, CS_K);
+  //spawn_proc(testfunc, CS_U);
 
   STI;
   shell();
 
-  // todo: again, gdt (uh done), serial (for why), memory safety, etc
+  // todo: serial (for why), memory safety, etc
   // todo2: FIX fat12 driver (oh lord)
   // todo3: FIX multitasking, and SYSCALLS!!!!!!!
 

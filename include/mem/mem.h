@@ -47,4 +47,6 @@ void  kmalloc_init();
 void *kmalloc(size_t size);
 void  kfree(void *ptr);
 
+void smbios_scan(void);
+
 #endif

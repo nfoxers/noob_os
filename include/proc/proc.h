@@ -75,9 +75,14 @@ struct user {
   struct file *u_ofile[NOFILE];
 };
 
+struct context {
+  uint32_t esp;
+  uint32_t eip;
+} __attribute__((packed));
+
 struct proc {
   uint8_t p_stat;
-  uint8_t p_pri;
+  uint8_t p_stidx;
   uint8_t p_sig;
 
   uint16_t p_pid;
@@ -88,15 +93,18 @@ struct proc {
 
   struct proc *p_next;
   struct proc *p_prev;
+
+  volatile struct context con;
   volatile struct regs *volatile p_frame;
 
   struct user *p_user;
 };
 
-extern void int40();
-extern void int41();
+extern void syscall();
 
 void general_switch();
+
+void schedule();
 
 struct proc *alloc_proc(void (*f)(), uint16_t cs);
 

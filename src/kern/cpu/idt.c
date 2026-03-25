@@ -84,9 +84,9 @@ extern void _irq13(void);
 extern void _irq14(void);
 extern void _irq15(void);
 
-extern void _ex40(void);
+extern void _ex48(void);
 
-isr_hand exception_hand[41] = {0};
+isr_hand exception_hand[50] = {0};
 isr_hand irq_hand[16]       = {0};
 
 void set_g(void (*a)(void), uint8_t idx, uint8_t flg) {
@@ -130,7 +130,7 @@ void fill_idt() {
   set_g(_ex30, 30, EX);
   set_g(_ex31, 31, EX);
 
-  set_g(_ex40, 40, EX_U);
+  set_g(_ex48, 48, EX_U);
 
   set_g(_irq0, 32, EX);
   set_g(_irq1, 33, EX);
@@ -141,7 +141,7 @@ void fill_idt() {
   set_g(_irq6, 38, EX);
   set_g(_irq7, 39, EX);
 
-  // set_g(_irq8, 40, EX); // sorry, try again later!
+  set_g(_irq8, 40, EX);
   set_g(_irq9, 41, EX);
   set_g(_irq10, 42, EX);
   set_g(_irq11, 43, EX);
@@ -218,7 +218,7 @@ void isr_handler(struct regs *r) {
 }
 
 void irq_handler(struct regs *r) {
-  // printkf("irq exception %d\n", r->int_no - 32);
+  //printkf("irq exception %d\n", r->int_no - 32);
 
   if (r->int_no < 32 || r->int_no >= 48)
     return;

@@ -37,7 +37,10 @@ void print_info(const char *s, int mto, const char *fmt, ...) {
   va_start(a, fmt);
   char buf[60];
   npf_vsnprintf(buf, 60, fmt, a);
-  printkf("[  \e\x0c%c\e\x0B%-6s\e\x0f] %-59s\n", !mto ? 0xc0 : 0xc3, s, buf);
+  if(mto < 2)
+    printkf("[  \e\x0c%c\e\x07%-6s\e\x0f] %-59s\n", !mto ? 0xc0 : 0xc3, s, buf);
+  else if(mto < 4)
+    printkf("[  \e\x0c%c\e\x07%-6s\e\x0f] %-59s\n", (mto == 2) ? 0xda : 0xc3, s, buf);
   va_end(a);
 }
 

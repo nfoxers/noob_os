@@ -36,6 +36,11 @@ extern isr_handler
 extern irq_handler
 
 struc regs
+  .ds resd 1
+  .es resd 1
+  .fs resd 1
+  .gs resd 1
+
   .edi resd 1 
   .esi resd 1
   .ebp resd 1
@@ -57,6 +62,10 @@ endstruc
 
 isr_stub:
   pushad
+  push gs
+  push fs
+  push es
+  push ds
 
   mov ax, 0x10
   mov es, ax
@@ -72,6 +81,11 @@ isr_stub:
   call isr_handler
   add esp, 4
 
+intret:
+  pop ds
+  pop es
+  pop fs
+  pop gs
   popad
 
   add esp, 8
@@ -79,6 +93,10 @@ isr_stub:
 
 irq_stub:
   pushad
+  push gs
+  push fs
+  push es
+  push ds
 
   mov ax, 0x10
   mov es, ax
@@ -94,10 +112,23 @@ irq_stub:
   call irq_handler
   add esp, 4
 
+  pop ds
+  pop es
+  pop fs
+  pop gs
   popad
 
   add esp, 8
   iret
+
+extern pic_eoi
+global childret
+childret:
+  push dword 0
+  call pic_eoi
+  add esp, 4
+  sti
+  jmp intret
 
 %macro _ex_ne 1
 global _ex%1
@@ -155,8 +186,6 @@ _ex_ne 29
 _ex_e 30
 _ex_ne 31
 
-_ex_ne 40
-
 _irq 0
 _irq 1
 _irq 2
@@ -174,3 +203,5 @@ _irq 12
 _irq 13
 _irq 14
 _irq 15
+
+_ex_ne 48
