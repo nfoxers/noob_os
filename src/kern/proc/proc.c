@@ -13,8 +13,6 @@ struct proc procs[NOPROC];
 struct user root;
 
 struct proc *volatile cur;
-struct proc *volatile prev;
-struct proc *volatile next;
 
 struct proc *run_head;
 
@@ -26,7 +24,7 @@ extern struct file root_fd[NOFILE];
 
 uint8_t used_stacks[NOPROC];
 
-uint8_t alloc_esp(uint32_t *pointer) {
+static uint8_t alloc_esp(uint32_t *pointer) {
   int i = 0;
   for (; i < NOPROC; i++) {
     if (!used_stacks[i]) {
@@ -38,7 +36,7 @@ uint8_t alloc_esp(uint32_t *pointer) {
   return 0xff;
 }
 
-void dealloc_esp(uint8_t idx) {
+static void dealloc_esp(uint8_t idx) {
   used_stacks[idx] = 0;
 }
 
@@ -93,12 +91,15 @@ void block(struct proc *p) {
 }
 
 void exit_cur() {
+  struct proc *next;
+
   next = cur->p_next;
-  prev = cur;
-  rq_remove(cur);
+  rq_remove(cur); // this removes cur->p_next
+
   cur->p_stat = P_SFREE;
-  cur->p_next = next;
-  dealloc_esp(prev->p_stidx);
+  cur->p_next = next; // so we deremove cur->p_next
+
+  dealloc_esp(cur->p_stidx);
   general_switch();
 }
 
@@ -145,7 +146,7 @@ struct proc *alloc_proc(void (*f)(), uint16_t cs) {
 
 struct proc tmp_proc;
 
-void task_switch(struct proc *next) {
+static void task_switch(struct proc *next) {
   struct proc *prv;
   prv = (cur == next) ? &tmp_proc : cur;
   cur = next;
@@ -169,7 +170,7 @@ void task_switch(struct proc *next) {
 }
 
 void schedule() {
-  struct proc *proc, *next = NULL;
+  struct proc *next = NULL;
   if (!run_head)
     return;
 

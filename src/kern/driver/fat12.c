@@ -44,7 +44,7 @@ void init_fs() {
   fsinfo.data_sectors = BS->total_sec - fsinfo.data_start;
 }
 
-uint16_t fat_value(uint16_t cluster) {
+static uint16_t fat_value(uint16_t cluster) {
   uint8_t *fat = (uint8_t *)(fsinfo.fat_start * 512 + 0x7c00);
   uint16_t fat_offset = cluster + (cluster / 2);
   uint16_t ent_offset = fat_offset % 1024;
@@ -56,7 +56,7 @@ uint16_t fat_value(uint16_t cluster) {
   return val;
 }
 
-void write_fat(uint16_t cluster, uint16_t next) {
+static void write_fat(uint16_t cluster, uint16_t next) {
   uint8_t *fat = (uint8_t *)(fsinfo.fat_start * 512 + 0x7c00);
   uint16_t fat_offset = cluster + (cluster / 2);
   uint16_t ent_offset = fat_offset % 1024;
@@ -75,7 +75,7 @@ void write_fat(uint16_t cluster, uint16_t next) {
   *(uint16_t *)&fat[ent_offset + 1024] = tmp;
 }
 
-int fat_name_match(struct direntry *e, const char *name) {
+static int fat_name_match(struct direntry *restrict e, const char *restrict name) {
   char fatname[13];
   char fname[9];
   char ext[4];
@@ -97,7 +97,7 @@ int fat_name_match(struct direntry *e, const char *name) {
   return !kstrcmp(fatname, name);
 }
 
-int fat_lookup(const char *path, struct inode *inode) {
+static int fat_lookup(const char *restrict path, struct inode *restrict inode) {
   // todo: long filanames
   char pathbuf[32];
   kstrncpy(pathbuf, path, sizeof(pathbuf));
@@ -149,7 +149,7 @@ int fat_lookup(const char *path, struct inode *inode) {
   return 0;
 }
 
-uint16_t read_file(struct inode *inode, uint8_t *data, uint16_t req_siz, size_t offset) {
+static uint16_t read_file(struct inode *restrict inode, uint8_t *restrict data, uint16_t req_siz, size_t offset) {
   if (offset >= inode->size)
     return 0;
 
@@ -179,18 +179,18 @@ uint16_t read_file(struct inode *inode, uint8_t *data, uint16_t req_siz, size_t 
   return read;
 }
 
-uint16_t last_cluster(uint16_t cur) {
+static uint16_t last_cluster(uint16_t cur) {
   for(; fat_value(cur) < 0xff8; cur = fat_value(cur)) ;
   return cur;
 }
 
-uint16_t find_free_cluster() {
+static uint16_t find_free_cluster() {
   uint16_t i = 2;
   while(fat_value(i++) != 0);
   return i-1;
 }
 
-uint16_t write_file(struct inode *inode, const uint8_t *data, size_t req_siz, size_t offset) {
+static uint16_t write_file(struct inode *restrict inode, const uint8_t *restrict data, size_t req_siz, size_t offset) {
 
   uint16_t cluster = inode->cluster0;
   for (size_t i = 0; i < offset / 1024; i++)
@@ -252,7 +252,7 @@ uint16_t write_file(struct inode *inode, const uint8_t *data, size_t req_siz, si
   return write;
 }
 
-void split_path(const char *path, char *pr, char *n) {
+static void split_path(const char *restrict path, char *restrict pr, char *restrict n) {
   char pathbuf[32];
   kstrncpy(pathbuf, path, sizeof(pathbuf));
 
@@ -274,7 +274,7 @@ void split_path(const char *path, char *pr, char *n) {
   kstrcpy(n, name);
 }
 
-void fat_format_name(const char *name, char out[11]) {
+static void fat_format_name(const char *restrict name, char out[restrict 11]) {
     char fname[9] = {0};
     char ext[4] = {0};
 
@@ -304,7 +304,7 @@ void list_dir() {
   }
 }
 
-void fat_find_free(struct inode *in, struct direntry **d) {
+static void fat_find_free(struct inode *restrict in, struct direntry **restrict d) {
   if(in->type != INODE_DIR) return;
   
   struct direntry *a;
@@ -314,7 +314,7 @@ void fat_find_free(struct inode *in, struct direntry **d) {
   *d = a;
 }
 
-int fat_create(const char *path, struct inode *inode) {
+static int fat_create(const char *restrict path, struct inode *restrict inode) {
 
   char parent[128];
   char name[32];

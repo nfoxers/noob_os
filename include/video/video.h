@@ -6,7 +6,6 @@
 #define EOF 0x04
 
 void printk(char *a);
-void scroll_n(uint8_t n);
 void putchr(char c);
 void clr_scr();
 void init_video();

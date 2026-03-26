@@ -64,7 +64,6 @@ void kmain(void) {
   struct time_s s;
   read_time(&s);
   
-  CLI;
   //spawn_proc(testfunc, CS_U);
 
   STI;

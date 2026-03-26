@@ -29,6 +29,12 @@ struct bios_da {
 
 void parse_bda();
 
+#if defined(__cplusplus)
+  #define RES
+#else
+  #define RES restrict
+#endif
+
 void    kmemcpy(void *dst, const void *src, size_t siz);
 uint8_t kmemcmp(const void *s1, const void *s2, size_t siz);
 void    kmemset(void *dst, int c, size_t len);
@@ -46,6 +52,9 @@ void zero_bss();
 void  kmalloc_init();
 void *kmalloc(size_t size);
 void  kfree(void *ptr);
+
+void *kmalloc_align(size_t siz, size_t align);
+void kfree_align(void *ptr);
 
 void smbios_scan(void);
 

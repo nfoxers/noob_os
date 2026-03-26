@@ -86,10 +86,10 @@ extern void _irq15(void);
 
 extern void _ex48(void);
 
-isr_hand exception_hand[50] = {0};
-isr_hand irq_hand[16]       = {0};
+static isr_hand exception_hand[50] = {0};
+static isr_hand irq_hand[16]       = {0};
 
-void set_g(void (*a)(void), uint8_t idx, uint8_t flg) {
+static void set_g(void (*a)(void), uint8_t idx, uint8_t flg) {
   idt_g[idx].flag      = flg;
   idt_g[idx].seg       = 0x08;
   idt_g[idx].offsetlow = (uint32_t)a & 0xffff;

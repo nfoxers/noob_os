@@ -7,13 +7,14 @@
 #define UART_FREQ 115200
 #define SRL_BUFSIZ 128
 
-uint32_t sfreq;
+static uint32_t sfreq;
 
 volatile uint8_t charbuf[SRL_BUFSIZ];
 static volatile uint16_t head;
 static volatile uint16_t tail;
 
-void serial_isr(struct regs *r) {
+static void serial_isr(struct regs *r) {
+  (void)r;
   uint16_t next = (head + 1) % SRL_BUFSIZ;
   char c = inb(COM1);
 

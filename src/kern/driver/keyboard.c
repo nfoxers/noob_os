@@ -3,6 +3,11 @@
 #include "video/video.h"
 #include <stdint.h>
 
+#define K_SPECIAl 0xe0
+
+#define K_S_PGDOWN 0x51
+#define K_S_PGUP   0x49
+
 #define K_ESC     0x01
 #define K_BKSPACE 0x0e
 #define K_TAB     0x0f
@@ -12,8 +17,9 @@
 #define K_RSHIFT  0x36
 #define K_LALT    0x38
 
-#define F_SHIFT (1 << 0)
-#define F_CTRL  (1 << 1)
+#define F_SHIFT 0x01
+#define F_CTRL  0x02
+#define F_SPCL  0x04
 
 #define K_BUFSIZ 128
 
@@ -41,16 +47,39 @@ uint8_t special_depress(uint8_t scan) {
     if (scan == ((k) | 0x80)) \
       return 1;               \
   }
+#define SP(k)        \
+  {                  \
+    if (scan == (k)) \
+      return 1;      \
+  }
 
   DP(K_RSHIFT);
   DP(K_LSHIFT);
   DP(K_LCTRL);
+
+  SP(K_SPECIAl);
+  SP(K_S_PGDOWN);
+  SP(K_S_PGUP);
   return 0;
 }
 
 uint8_t parse_char(uint8_t scan) {
   if (scan > sizeof(scancode_map) && !special_depress(scan)) {
     return 0;
+  }
+
+  if (kbd_flg & F_SPCL) {
+    kbd_flg &= ~F_SPCL;
+
+    if (scan == 0x49) {
+      vscroll_up();
+      return 0;
+    }
+
+    if (scan == 0x51) {
+      vscroll_down();
+      return 0;
+    }
   }
 
   if (scan == K_LSHIFT || scan == K_RSHIFT) {
@@ -70,6 +99,11 @@ uint8_t parse_char(uint8_t scan) {
 
   if (scan == (0x80 | K_LCTRL)) {
     kbd_flg &= ~F_CTRL;
+    return 0;
+  }
+
+  if (scan == K_SPECIAl) {
+    kbd_flg |= F_SPCL;
     return 0;
   }
 
@@ -96,10 +130,11 @@ uint8_t parse_char(uint8_t scan) {
   return scancode_map[scan];
 }
 
-void kbd_handler(struct regs *r) {
+static void kbd_handler(struct regs *r) {
   (void)r;
   uint8_t scan = inb(0x60);
-  uint8_t ch   = parse_char(scan);
+  // printkf("%02x ", scan);
+  uint8_t ch = parse_char(scan);
 
   if (ch) {
     uint8_t next = (head + 1) % K_BUFSIZ;

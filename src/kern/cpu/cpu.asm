@@ -16,22 +16,6 @@ flush_gdt:
   ltr ax 
   ret
 
-global chk_cpuid
-chk_cpuid:
-  pushfd
-  pushfd
-
-  xor dword [esp], 0x00200000
-  popfd
-  pushfd
-
-  pop eax
-  xor eax, [esp]
-
-  popfd
-  and eax, 0x00200000 
-  ret ; zero = no cpuid :sad:
-
 extern isr_handler
 extern irq_handler
 

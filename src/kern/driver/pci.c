@@ -124,10 +124,13 @@ void pci_init() {
       for (uint32_t func = 0; func < 8; func++) {
         uint32_t id = pci_readl(bus, dev, func, 0);
         if (id != 0xffffffff) {
-          struct pci_hdr h;
-          pci_readall(&h, bus, dev);
-          if(id == 0x813910ec) rtl8139_init(&h, bus, dev);
           
+          if (id == 0x813910ec) {
+            struct pci_hdr h;
+            pci_readall(&h, bus, dev);
+            rtl8139_init(&h, bus, dev);
+          }
+
           if (func == 0) {
             uint8_t hdr = (pci_readl(bus, dev, func, 0x0c) >> 16) & 0xff;
             if (!(hdr & 0x80)) {

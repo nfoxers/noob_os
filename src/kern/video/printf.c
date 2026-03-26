@@ -3,8 +3,7 @@
 #include "video/video.h"
 #include "stdarg.h"
 
-
-void wrapper(int c, void *ctx) {
+static void wrapper(int c, void *ctx) {
   (void)ctx;
   putchr((char)c);
 }
@@ -25,14 +24,14 @@ int snprintkf(char *restrict buf, size_t siz, const char *restrict fmt, ...) {
   return r;
 }
 
-void print_init(const char *f, const char *s, int rc) {
+void print_init(const char *restrict f, const char *restrict s, int rc) {
   const char *ok = "\e\x0agood\e\x0f";
   const char *no = "\e\x0c""err \e\x0f";
 
   printkf("[ \e\x0c%-8s\e\x0f] %-59s [ %s ]", f, s, rc ? no : ok);
 }
 
-void print_info(const char *s, int mto, const char *fmt, ...) {
+void print_info(const char *restrict s, int mto, const char *restrict fmt, ...) {
   va_list a;
   va_start(a, fmt);
   char buf[60];
@@ -44,7 +43,7 @@ void print_info(const char *s, int mto, const char *fmt, ...) {
   va_end(a);
 }
 
-void print_error(const char *s, int mto, const char *fmt, ...) {
+void print_error(const char *restrict s, int mto, const char *restrict fmt, ...) {
   va_list a;
   va_start(a, fmt);
   char buf[60];

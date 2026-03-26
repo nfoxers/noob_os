@@ -1,5 +1,4 @@
 #include "mem/mem.h"
-#include "io.h"
 #include "video/printf.h"
 #include <stdint.h>
 
@@ -38,24 +37,42 @@ struct smbhead_typ0 { // firmware info
 
 size_t smbios_headlen(struct smbhead *hd) {
   size_t i;
-  const char *strtab = (char *)hd + hd->len;
-  for(i = 1; strtab[i - 1] != 0x00 || strtab[i] != 0x00; i++);
-  return hd->len + i + 1;
+  const char *strtab = (const char *)hd + hd->len;
+
+  i = 1;
+  while((strtab[i-1] != 0) || (strtab[i] != 0))
+    i++;
+
+  size_t k = hd->len + i + 1;
+  return k;
 }
 
-void print_smbinfo(struct smbhead *start, size_t maxlen) {
+const char *getstr(struct smbhead *c, uint32_t idx) {
+  const char *strtab = (const char *)c + c->len;
+  idx--;
+  while(idx) {
+    strtab = strtab + kstrlen(strtab);
+    idx--;
+  }
+  return strtab;
+}
+
+void print_smbinfo(struct smbhead *start) {
   struct smbhead *cur = start;
 
   // here we go the iterator
   while(cur->typ != 127) {
-    cur = cur + smbios_headlen(cur);
-    //printkf("next %d\n", cur->typ);
-    if(cur - start > maxlen) break;
+
+    if(cur->typ == 0) {
+      //struct smbhead_typ0 *t = (struct smbhead_typ0 *)cur;
+      // todo: proper smbios handling and output
+    }
+    cur = (struct smbhead *)((uint8_t*)cur + smbios_headlen(cur));
   }
 }
 
 void smbios_scan(void) {
-  print_info("inf", 2, "scanning for smbios...");
+  print_info("info", 2, "scanning for smbios...");
   uint8_t *eps = (uint8_t *)SMB_START;
   uint32_t len, i;
   uint8_t chk = 0;
@@ -70,7 +87,8 @@ void smbios_scan(void) {
       if(chk == 0) {
         struct eps3 *ep = (struct eps3 *)eps;
         print_init("smbios", "smbios found", 0);
-        print_smbinfo((struct smbhead *)ep->tabaddr_lo, ep->maxsiz);
+        print_info("addr", 0, "table addr: %p", ep);
+        print_smbinfo((struct smbhead *)ep->tabaddr_lo);
         break;
       }
     }

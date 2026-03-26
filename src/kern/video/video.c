@@ -8,19 +8,18 @@
 
 static uint8_t *vbuf;
 
-extern void scroll();
-extern void clear();
-
-uint16_t cursor     = 0;
-uint16_t bottom     = 0;
-uint16_t bottom_max = 0;
+static uint16_t cursor     = 0;
+static uint16_t bottom     = 0;
+static uint16_t bottom_max = 0;
 
 static uint8_t c_att = 0x00;
 static uint8_t vflag = 0;
 
 #define VF_ESCAPE 0x01
 
-void setcursor() {
+#define V_MAXPAGE 2
+
+static void setcursor() {
   if ((int16_t)cursor - bottom * 80 < 0)
     return;
 
@@ -32,7 +31,7 @@ void setcursor() {
   outb(0x3d5, (uint8_t)(crs >> 8) & 0xff);
 }
 
-void readcursor() {
+static void readcursor() {
   uint8_t hi, lo;
   outb(0x3d4, 0x0f);
   lo = inb(0x3d5);
@@ -43,15 +42,15 @@ void readcursor() {
   cursor = (hi << 8) | lo;
 }
 
-void scroll_once() {
+static void scroll_once() {
   cursor -= 80;
-  kmemcpy(VGA, VGA + 80*2, 80*25*2);
-  kmemcpy(vbuf, vbuf + 80*2, 80*25*2*2);
+  kmemcpy(VGA, VGA + 80 * 2, 80 * 25 * 2);
+  kmemcpy(vbuf, vbuf + 80 * 2, 80 * 25 * 2 * V_MAXPAGE);
   vflush();
 }
 
-void backspace() {
-  vbuf[--cursor * 2] = 0;
+static void backspace() {
+  vbuf[--cursor * 2]                = 0;
   VGA[cursor * 2 - bottom * 80 * 2] = 0;
   setcursor();
 }
@@ -84,7 +83,7 @@ void putchr(char c) {
     cursor++;
   }
 
-  if(cursor >= 2000*2) {
+  if (cursor >= 2000 * 2) {
     scroll_once();
   }
 
@@ -93,7 +92,7 @@ void putchr(char c) {
   }
 
   setcursor();
-  //vflush();
+  // vflush();
 }
 
 void printk(char *a) {
@@ -109,7 +108,7 @@ void clr_scr() {
   setcursor();
   asm volatile(
       "pushl %%edi\n"
-      "movl $0, %%eax\n"
+      "movl $0x0f000f00, %%eax\n"
       "movl $0xb8000, %%edi\n"
       "movl $1000, %%ecx\n"
       "rep stosl\n"
@@ -117,7 +116,7 @@ void clr_scr() {
       "movl %[len], %%ecx\n"
       "rep stosl\n"
       "popl %%edi\n" ::[addr] "m"(vbuf),
-      [len] "d"(80 * 25 * 2 * 2 / 4));
+      [len] "d"(80 * 25 * 2 * V_MAXPAGE / 4));
 }
 
 void vflush() {
@@ -128,9 +127,9 @@ void vscroll_down() {
   if (bottom == 25)
     return;
   bottom++;
-  if (cursor + 80 < 2000)
-    cursor += 80;
+
   vflush();
+  setcursor();
 }
 
 void vscroll_up() {
@@ -139,11 +138,13 @@ void vscroll_up() {
   bottom--;
 
   vflush();
+  setcursor();
 }
 
 void init_video() {
-  vbuf = kmalloc(80 * 25 * 2 * 2); // capacity of two 'pages'
+  vbuf = kmalloc(80 * 25 * 2 * V_MAXPAGE); // capacity of V_MAXPAGE 'pages' (i.e one full vga screen)
   kmemcpy(vbuf, VGA, 80 * 25 * 2);
+  // clr_scr();
 
   readcursor();
   c_att = 0x0f;

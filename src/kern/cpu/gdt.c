@@ -4,12 +4,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
-struct segdesc sd[6] = {0};
-struct gdtr    gdtr  = {0};
+static struct segdesc sd[6] = {0};
+static struct gdtr    gdtr  = {0};
 
 struct tss glob_tss;
 
-void fill_seg(struct segdesc *s, uint16_t lim, size_t base, uint8_t flg, uint8_t ab) {
+static void fill_seg(struct segdesc *s, uint16_t lim, size_t base, uint8_t flg, uint8_t ab) {
   s->base_lo = base & 0xffff;
   s->base_ll = (base >> 16) & 0xff;
   s->base_h  = (base >> 24) & 0xff;

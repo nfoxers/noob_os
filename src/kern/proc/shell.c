@@ -7,7 +7,7 @@
 #include "video/printf.h"
 #include "video/video.h"
 
-void bf() {
+static void bf() {
 #define BF_BUFSIZ 128
   uint8_t dbuf[BF_BUFSIZ]; // data buffer
   uint8_t cbuf[BF_BUFSIZ]; // command buffer

@@ -58,6 +58,8 @@ volatile uint32_t counter;
 void general_switch();
 
 void timer_handler(struct regs *r) {
+  (void)r;
+  
   counter++;
   pic_eoi();
   

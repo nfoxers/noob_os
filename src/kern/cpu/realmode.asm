@@ -21,8 +21,6 @@ ldtr:
   dw 0x3ff
   dd 0x00
 
-
-
 [bits 16]
 pm16:
   mov ax, 0x10
