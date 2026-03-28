@@ -3,7 +3,6 @@
 #include "cpu/idt.h"
 #include "driver/fat12.h"
 #include "driver/keyboard.h"
-//#include "driver/pci.h"
 #include "driver/pci.h"
 #include "driver/time.h"
 #include "mem/mem.h"
@@ -61,15 +60,15 @@ void kmain(void) {
 
   check_capat();
   printk("time of boot: ");
-  struct time_s s;
-  read_time(&s);
+
+  print_time();
   
   //spawn_proc(testfunc, CS_U);
 
   STI;
   shell();
 
-  // todo: serial (for why), memory safety, etc
+  // todo: memory safety, etc
   // todo2: FIX fat12 driver (oh lord)
   // todo3: FIX multitasking, and SYSCALLS!!!!!!!
 

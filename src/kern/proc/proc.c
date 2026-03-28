@@ -12,7 +12,7 @@ extern uint8_t __text_end__;
 struct proc procs[NOPROC];
 struct user root;
 
-struct proc *volatile cur;
+struct proc *volatile p_curproc;
 
 struct proc *run_head;
 
@@ -93,13 +93,13 @@ void block(struct proc *p) {
 void exit_cur() {
   struct proc *next;
 
-  next = cur->p_next;
-  rq_remove(cur); // this removes cur->p_next
+  next = p_curproc->p_next;
+  rq_remove(p_curproc); // this removes p_curproc->p_next
 
-  cur->p_stat = P_SFREE;
-  cur->p_next = next; // so we deremove cur->p_next
+  p_curproc->p_stat = P_SFREE;
+  p_curproc->p_next = next; // so we deremove p_curproc->p_next
 
-  dealloc_esp(cur->p_stidx);
+  dealloc_esp(p_curproc->p_stidx);
   general_switch();
 }
 
@@ -148,8 +148,8 @@ struct proc tmp_proc;
 
 static void task_switch(struct proc *next) {
   struct proc *prv;
-  prv = (cur == next) ? &tmp_proc : cur;
-  cur = next;
+  prv = (p_curproc == next) ? &tmp_proc : p_curproc;
+  p_curproc = next;
 
   asm volatile(
       "pushfl\n"
@@ -174,12 +174,12 @@ void schedule() {
   if (!run_head)
     return;
 
-  if (!cur) {
+  if (!p_curproc) {
     next = run_head;
-    cur  = run_head;
-  } else if (cur == cur->p_next)
+    p_curproc  = run_head;
+  } else if (p_curproc == p_curproc->p_next)
     return;
-  next = cur->p_next;
+  next = p_curproc->p_next;
 
   task_switch(next);
 }
@@ -204,16 +204,15 @@ void spawn_proc(void (*f)(), uint16_t cs) {
 void init_root_proc() {
   struct proc *kproc = alloc_proc((void (*)())0x9400, CS_K);
   rq_add(kproc);
-  cur = kproc;
+  p_curproc = kproc;
 
   kproc->p_size = &__text_end__ - &__text_start__;
 
   printkf("kernel text size: %d B\n", procs[0].p_size);
 
   root.u_uid  = 0;
-  root.u_rdir = &root_dir;
-  root.u_cdir = &root_dir;
   root.u_gid  = 0;
+  // cdir will handled by fs
 
   register_ex(sys_yield, SYS_INTNO);
 }

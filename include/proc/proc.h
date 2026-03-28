@@ -37,11 +37,20 @@ struct direntry {
 #define F_WRONLY 0x0002 // i'll just implement them later man
 #define F_USED   0x0004
 
+#define PRM_USR 0100
+#define PRM_GRP 0010
+#define PRM_OTH 0001
+
+#define PRM_R 04
+#define PRM_W 02
+#define PRM_X 01
+
 struct inode {
   uint16_t         size;
   uint16_t         cluster0;
   struct direntry *entaddr;
   uint16_t         type;
+  uint16_t         permission;
 };
 
 struct file {
@@ -65,12 +74,12 @@ struct user {
 
   uint16_t u_err;
   uint32_t u_arg[5];
-  uint32_t u_tsize;
-  uint32_t u_dsize;
-  uint32_t u_ssize;
+  uint32_t u_tsize; // text size
+  uint32_t u_dsize; // data size
+  uint32_t u_ssize; // stack size
 
-  struct inode *u_cdir;
-  struct inode *u_rdir;
+  struct inode u_cdir;
+  //struct inode *u_rdir;
 
   struct file *u_ofile[NOFILE];
 };

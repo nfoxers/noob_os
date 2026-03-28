@@ -1,4 +1,3 @@
-#include "ether/if_ether.h"
 #include "driver/pci.h"
 #include "cpu/idt.h"
 #include "io.h"
@@ -36,28 +35,5 @@ void rtl8139_init(struct pci_hdr *hdr, uint32_t bus, uint32_t dev) {
   uint8_t *k = (uint8_t *)mac;
   print_info("rtl", 0, "mac: %02x:%02x:%02x:%02x:%02x:%02x", k[0], k[1], k[2], k[3], k[4], k[5]);
 
-  uint8_t *buf = kmalloc(sizeof(struct ethhdr) + sizeof(struct arphdr));
-
-  struct ethhdr ehdr;
-  ehdr.h_proto = khtons(ETH_P_ARP);
-  kmemset(&ehdr.h_dest, 0xff, ETH_ALEN);
-  kmemcpy(&ehdr.h_source, mac, ETH_ALEN);
-
-  struct arphdr ahdr;
-  ahdr.htype = khtons(ARP_HTYPE);
-  ahdr.hlen = ARP_HLEN;
-  ahdr.plen = ARP_PLEN;
-  ahdr.ptype = khtons(ARP_PTYPE);
-  ahdr.op = khtons(ARP_OP_REQ);
-  kmemset(&ahdr.daddr, 0xff, 4);
-  kmemset(&ahdr.dstaddr, 0xff, ETH_ALEN);
-
-  kmemcpy(buf, &ehdr, sizeof(struct ethhdr));
-  kmemcpy(buf + sizeof(struct ethhdr), &ahdr, sizeof(struct arphdr));
-
-  outl(devaddr + 0x20, (uint32_t)buf);
-  outl(devaddr + 0x10, 60);
-
-  while(!(inl(devaddr + 0x10) & 15));
   kfree(rxbf);
 }

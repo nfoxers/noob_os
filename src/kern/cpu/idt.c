@@ -96,59 +96,22 @@ static void set_g(void (*a)(void), uint8_t idx, uint8_t flg) {
   idt_g[idx].offsethi  = ((uint32_t)a >> 16) & 0xffff;
 }
 
+static void (*const itab[])(void) = {
+  _ex0,  _ex1, _ex2, _ex3, _ex4, _ex5, _ex6, _ex7, _ex8, _ex9,
+  _ex10,  _ex11, _ex12, _ex13, _ex14, _ex15, _ex16, _ex17, _ex18, _ex19,
+  _ex20,  _ex21, _ex22, _ex23, _ex24, _ex25, _ex26, _ex27, _ex28, _ex29,
+  _ex30, _ex31,
+
+  _irq0, _irq1, _irq2, _irq3, _irq4, _irq5, _irq6, _irq7, _irq8, _irq9,
+  _irq10, _irq11, _irq12, _irq13, _irq14, _irq15,
+
+  _ex48
+};
+
 void fill_idt() {
-  set_g(_ex0, 0, EX);
-  set_g(_ex1, 1, TR);
-  set_g(_ex2, 2, EX);
-  set_g(_ex3, 3, TR);
-  set_g(_ex4, 4, TR);
-  set_g(_ex5, 5, EX);
-  set_g(_ex6, 6, EX);
-  set_g(_ex7, 7, EX);
-  set_g(_ex8, 8, TR);
-  set_g(_ex9, 9, EX);
-  set_g(_ex10, 10, EX);
-  set_g(_ex11, 11, EX);
-  set_g(_ex12, 12, EX);
-  set_g(_ex13, 13, EX);
-  set_g(_ex14, 14, EX);
-  set_g(_ex15, 15, EX);
-  set_g(_ex16, 16, EX);
-  set_g(_ex17, 17, EX);
-  set_g(_ex18, 18, TR);
-  set_g(_ex19, 19, EX);
-  set_g(_ex20, 20, EX);
-  set_g(_ex21, 21, EX);
-  set_g(_ex22, 22, EX);
-  set_g(_ex23, 23, EX);
-  set_g(_ex24, 24, EX);
-  set_g(_ex25, 25, EX);
-  set_g(_ex26, 26, EX);
-  set_g(_ex27, 27, EX);
-  set_g(_ex28, 28, EX);
-  set_g(_ex29, 29, EX);
-  set_g(_ex30, 30, EX);
-  set_g(_ex31, 31, EX);
-
-  set_g(_ex48, 48, EX_U);
-
-  set_g(_irq0, 32, EX);
-  set_g(_irq1, 33, EX);
-  set_g(_irq2, 34, EX);
-  set_g(_irq3, 35, EX);
-  set_g(_irq4, 36, EX);
-  set_g(_irq5, 37, EX);
-  set_g(_irq6, 38, EX);
-  set_g(_irq7, 39, EX);
-
-  set_g(_irq8, 40, EX);
-  set_g(_irq9, 41, EX);
-  set_g(_irq10, 42, EX);
-  set_g(_irq11, 43, EX);
-  set_g(_irq12, 44, EX);
-  set_g(_irq13, 45, EX);
-  set_g(_irq14, 46, EX);
-  set_g(_irq15, 47, EX);
+  for(uint32_t i = 0; i < sizeof(itab)/sizeof(itab[0]); i++) {
+    set_g(itab[i], i, EX_U);
+  }
 }
 
 void set_idtr() {

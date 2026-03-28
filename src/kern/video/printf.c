@@ -1,7 +1,9 @@
 #define NANOPRINTF_IMPLEMENTATION
 #include "video/printf.h"
 #include "video/video.h"
+#include "kassert.h"
 #include "stdarg.h"
+
 
 static void wrapper(int c, void *ctx) {
   (void)ctx;
@@ -50,4 +52,11 @@ void print_error(const char *restrict s, int mto, const char *restrict fmt, ...)
   npf_vsnprintf(buf, 60, fmt, a);
   printkf("[  \e\x0c%c%-6s\e\x0f] %-59s\n", !mto ? 0xc0 : 0xc3, s, buf);
   va_end(a);
+}
+
+void _kassert(const char *restrict expr, const char *restrict file, uint32_t line) {
+  printkf("assert in %s (%d): %s\n", file, line, expr);
+  while(1) {
+    asm volatile("cli\nhlt");
+  }
 }

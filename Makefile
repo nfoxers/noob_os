@@ -13,7 +13,7 @@ OBJ := $(patsubst ./src/kern/%.asm,./build/kern/%.o, $(OBJ))
 
 DEP := $(OBJ:.o=.d)
 
-.PHONY: clean run debug size
+.PHONY: clean run debug size size2
 
 all: bin/os.img size
 
@@ -59,3 +59,6 @@ size: tools/chksiz.py
 	@echo --------------
 	@python3 $<
 	@llvm-size build/kern.elf
+
+size2: bin/os.img
+	@llvm-objdump -t build/kern.elf | awk '{ dec = strtonum("0x"$$5); print dec, $$0 }' | sort -n

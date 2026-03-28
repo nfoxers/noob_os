@@ -30,11 +30,10 @@ void read_time(struct time_s *tim) {
     tim->min  = read_cmos(RTC_MIN);
     tim->hour = read_cmos(RTC_HOR);
 
-    tim->day  = read_cmos(RTC_WDY);
+    tim->day  = read_cmos(RTC_DAY);
     tim->mon  = read_cmos(RTC_MON);
     tim->year = read_cmos(RTC_JHR);
 
-    printkf("%02d:%02d:%02d UTC+0 (hh:mm:ss)\n", tim->hour, tim->min, tim->sec);
     return;
   }
 
@@ -42,15 +41,19 @@ void read_time(struct time_s *tim) {
   tim->min  = normal(read_cmos(RTC_MIN));
   tim->hour = normal(read_cmos(RTC_HOR));
 
-  tim->day  = normal(read_cmos(RTC_WDY));
+  tim->day  = normal(read_cmos(RTC_DAY));
   tim->mon  = normal(read_cmos(RTC_MON));
   tim->year = normal(read_cmos(RTC_JHR));
 
-  printkf("%02d:%02d:%02d UTC+0 (hh:mm:ss)\n", tim->hour, tim->min, tim->sec);
+}
+
+void print_time() {
+  struct time_s tim;
+  read_time(&tim);
+  printkf("20%02d/%02d/%02d, %02d:%02d:%02d UTC+0 (hh:mm:ss)\n", tim.year, tim.mon, tim.day, tim.hour, tim.min, tim.sec);
 }
 
 // todo: lapic timer and probably hpet
-// AND fix preemptive mulitasking
 
 uint32_t          pit_freq;
 volatile uint32_t counter;

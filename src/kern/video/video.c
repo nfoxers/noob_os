@@ -19,7 +19,7 @@ static uint8_t vflag = 0;
 
 #define V_MAXPAGE 2
 
-static void setcursor() {
+void setcursor() {
   if ((int16_t)cursor - bottom * 80 < 0)
     return;
 
@@ -31,7 +31,7 @@ static void setcursor() {
   outb(0x3d5, (uint8_t)(crs >> 8) & 0xff);
 }
 
-static void readcursor() {
+void readcursor() {
   uint8_t hi, lo;
   outb(0x3d4, 0x0f);
   lo = inb(0x3d5);
@@ -42,14 +42,14 @@ static void readcursor() {
   cursor = (hi << 8) | lo;
 }
 
-static void scroll_once() {
+void scroll_once() {
   cursor -= 80;
   kmemcpy(VGA, VGA + 80 * 2, 80 * 25 * 2);
   kmemcpy(vbuf, vbuf + 80 * 2, 80 * 25 * 2 * V_MAXPAGE);
   vflush();
 }
 
-static void backspace() {
+void backspace() {
   vbuf[--cursor * 2]                = 0;
   VGA[cursor * 2 - bottom * 80 * 2] = 0;
   setcursor();

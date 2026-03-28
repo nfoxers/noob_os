@@ -2,7 +2,6 @@
 #define FAT12_H
 
 #include "mem/mem.h"
-#include "proc/proc.h"
 #include "stdint.h"
 
 struct bootsect {
@@ -33,7 +32,7 @@ struct bootsect {
 
 void init_fs();
 
-void list_dir();
+void list_dir(const char *path);
 int  sys_unlink(const char *path);
 
 #define O_CREAT 0x0001
@@ -41,5 +40,9 @@ int  sys_unlink(const char *path);
 int    sys_open(const char *fname, uint16_t flags);
 size_t sys_read(int fd, uint8_t *buf, size_t n);
 size_t sys_write(int fd, const uint8_t *buf, size_t n);
+
+int sys_mkdir(const char *path);
+int sys_close(int fd);
+int sys_cd(const char *path);
 
 #endif

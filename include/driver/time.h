@@ -33,5 +33,6 @@ void read_time(struct time_s *tim);
 void init_pit(uint32_t freq);
 
 uint32_t gettime(uint32_t *ms);
+void print_time();
 
 #endif
