@@ -1,6 +1,7 @@
 #include "cpu/ccpu.h"
 #include "cpuid.h"
 #include "video/video.h"
+#include "video/printf.h"
 
 struct cpu_capat c_capat;
 
@@ -72,6 +73,8 @@ uint32_t apic_read(uint16_t reg) {
 }
 
 void set_apic() {
+  print_init("apic", "initializing the apic...", 0);
+
   set_apic_base(get_apic_base());
   apic_write(0xf0, apic_read(0xf0) | 0x100);
   // todo: set ioapic (qemu SOMEHOW doesnt give me acpi) and interrupts via apic

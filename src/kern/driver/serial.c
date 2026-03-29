@@ -62,6 +62,8 @@ void s_putchr(int c) {
 }
 
 uint32_t init_serial(uint32_t freq) {
+  
+
   uint32_t div = UART_FREQ / freq;
   if (div > UINT16_MAX) {
     div   = 0xffff;
@@ -82,8 +84,10 @@ uint32_t init_serial(uint32_t freq) {
   outb(COM1 + 4, 0x1e);
 
   outb(COM1 + 0, 0xAE);
-  if (inb(COM1 + 0) != 0xAE) 
+  if (inb(COM1 + 0) != 0xAE) {
+    print_init("srl", "initializing serial...", 1);
     return 1;
+  }
 
   outb(COM1 + 4, 0x0f);
   print_info("frq", 2, "baud rate: \e\x09%d baud * hz\e\x0f", UART_FREQ / div);
@@ -93,5 +97,6 @@ uint32_t init_serial(uint32_t freq) {
   register_irq(serial_isr, 4);
 
   pic_cm(4);
+  print_init("srl", "initializing serial...", 0);
   return 0;
 }

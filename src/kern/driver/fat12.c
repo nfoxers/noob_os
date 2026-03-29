@@ -30,6 +30,8 @@ extern struct inode root_dir;
 extern struct proc *volatile p_curproc;
 
 void init_fs() {
+  print_init("fat", "initializing filesystem driver...", 0);
+  
   if (BS->bootsig != 0xaa55) {
     printk("mismatching boot signatures, either corrupt memory or idk\n");
     return;

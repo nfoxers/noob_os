@@ -1,5 +1,6 @@
 #include "driver/keyboard.h"
 #include "cpu/idt.h"
+#include "video/printf.h"
 #include "video/video.h"
 #include <stdint.h>
 
@@ -35,13 +36,17 @@ const uint8_t scancode_map_shift[] = {
     'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ':', '\"', '~', 000, '|', 'Z',
     'X', 'C', 'V', 'B', 'N', 'M', '<', '>', '?', 000, '*', 000, ' ', 000};
 
-volatile uint8_t kbd_flg = 0;
+volatile struct {
+  uint8_t k_shift;
+  uint8_t k_ctrl;
+  uint8_t k_spcl;
+} kbd_ctrl = {0};
 
 volatile uint8_t kbd_buffer[K_BUFSIZ];
 volatile uint8_t head = 0;
 volatile uint8_t tail = 0;
 
-uint8_t special_depress(uint8_t scan) {
+uint8_t special_press(uint8_t scan) {
 #define DP(k)                 \
   {                           \
     if (scan == ((k) | 0x80)) \
@@ -53,23 +58,28 @@ uint8_t special_depress(uint8_t scan) {
       return 1;      \
   }
 
-  DP(K_RSHIFT);
-  DP(K_LSHIFT);
-  DP(K_LCTRL);
-
-  SP(K_SPECIAl);
   SP(K_S_PGDOWN);
   SP(K_S_PGUP);
   return 0;
 }
 
 uint8_t parse_char(uint8_t scan) {
-  if (scan > sizeof(scancode_map) && !special_depress(scan)) {
+  if (scan == K_SPECIAl) {
+    kbd_ctrl.k_spcl++;
     return 0;
   }
 
-  if (kbd_flg & F_SPCL) {
-    kbd_flg &= ~F_SPCL;
+  int press = !((scan & 0x80) >> 7);
+  scan      = scan & 0x7f;
+
+  if (scan > sizeof(scancode_map) && !special_press(scan)) {
+    return 0;
+  }
+
+  if (kbd_ctrl.k_spcl) {
+    kbd_ctrl.k_spcl &= 0;
+
+    if(!press) return 0;
 
     if (scan == 0x49) {
       vscroll_up();
@@ -82,48 +92,33 @@ uint8_t parse_char(uint8_t scan) {
     }
   }
 
-  if (scan == K_LSHIFT || scan == K_RSHIFT) {
-    kbd_flg |= F_SHIFT;
+  switch (scan) {
+  case K_LSHIFT:
+  case K_RSHIFT:
+    kbd_ctrl.k_shift = press;
     return 0;
-  }
-
-  if (scan == (0x80 | K_LSHIFT) || scan == (0x80 | K_RSHIFT)) {
-    kbd_flg &= ~F_SHIFT;
+  case K_LCTRL:
+    kbd_ctrl.k_ctrl = press;
     return 0;
+  case K_ENTER:
+    if (press)
+      return '\n';
+  case K_BKSPACE:
+    if (press)
+      return '\b';
+  case K_TAB:
+    if (press)
+      return ' ';
   }
 
-  if (scan == K_LCTRL) {
-    kbd_flg |= F_CTRL;
+  if (!press)
     return 0;
-  }
 
-  if (scan == (0x80 | K_LCTRL)) {
-    kbd_flg &= ~F_CTRL;
-    return 0;
-  }
-
-  if (scan == K_SPECIAl) {
-    kbd_flg |= F_SPCL;
-    return 0;
-  }
-
-  if (scan == K_ENTER) {
-    return '\n';
-  }
-
-  if (scan == K_BKSPACE) {
-    return '\b';
-  }
-
-  if (scan == K_TAB) {
-    return ' ';
-  }
-
-  if (kbd_flg & F_SHIFT) {
+  if (kbd_ctrl.k_shift) {
     return scancode_map_shift[scan];
   }
 
-  if (kbd_flg & F_CTRL) {
+  if (kbd_ctrl.k_ctrl) {
     return scancode_map_shift[scan] - 'A' + 1; // utter genius.
   }
 
@@ -147,7 +142,36 @@ static void kbd_handler(struct regs *r) {
   pic_eoi();
 }
 
+void init_ps2() {
+  outb(0x64, 0xad); // disable devs
+  outb(0x64, 0xa7);
+  for(int i = 0; i < 10; i++) inb(0x60); // flush
+  
+  outb(0x64, 0x20);
+  uint8_t ccb = inb(0x60);
+  printkf("ccb: %x\n", ccb);
+  ccb = 0b01000100;
+  outb(0x64, 0x60);
+  outb(0x60, ccb);
+
+  outb(0x64, 0xaa); // self test
+  uint8_t ret = inb(0x60);
+  if(ret != 0x55) {
+    printkf("ps/2 cont error %x %x\n", ret, inb(0x60));
+    while(1) asm volatile("hlt");
+  }
+
+  outb(0x64, 0xae); // enable again
+  outb(0x64, 0xa8);
+
+  ccb = 0b01000101;
+  outb(0x64, 0x60);
+  outb(0x60, ccb);
+}
+
 void init_kbd() {
+  print_init("kbd", "initializing the keyboard...", 0);
+  init_ps2();
   register_irq(kbd_handler, 1);
   pic_cm(1);
 }

@@ -77,6 +77,8 @@ uint32_t gettime(uint32_t *ms) {
 }
 
 void init_pit(uint32_t freq) {
+  print_init("pit", "intializing the pit...", 0);
+
   pit_freq     = freq;
   counter      = 0;
   uint32_t div = (PIT_FREQ / freq);

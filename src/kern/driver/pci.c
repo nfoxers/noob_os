@@ -39,21 +39,19 @@ void setbit_cmd(uint8_t bit, uint32_t bus, uint32_t slot) {
   pci_writel(bus, slot, 0, 0x04, tmp | (1 << bit));
 }
 
-void pci_readall(struct pci_hdr *h, uint32_t bus, uint32_t dev) {
+void pci_readall(struct pci_hdr *h, uint32_t bus, uint32_t dev, uint32_t func) {
   uint32_t *hdr = (uint32_t *)h;
   for (uint32_t i = 0; i < sizeof(struct pci_hdr) / 4; i++) {
-    hdr[i] = pci_readl(bus, dev, 0, i * 4);
+    hdr[i] = pci_readl(bus, dev, func, i * 4);
   }
 }
-
-void rtl8139_init(struct pci_hdr *hdr, uint32_t bus, uint32_t dev);
 
 const char *classcode(uint8_t code) {
   switch (code) {
   case 0:
     return "unclassified";
   case 0x1:
-    return "ms controller"; // mass storage
+    return "mass controller"; // mass storage
   case 0x2:
     return "network controler";
   case 0x3:
@@ -65,17 +63,17 @@ const char *classcode(uint8_t code) {
   case 0x6:
     return "bridge";
   case 0x7:
-    return "sc controller"; // simple comms
+    return "simplecomms controller"; // simple comms
   case 0x8:
     return "base sys prp"; // base system peripheral
   case 0x9:
-    return "di controller"; // device input
+    return "input dev controller"; // device input
   case 0xa:
     return "dock station";
   case 0xb:
     return "proc";
   case 0xc:
-    return "sb controll";
+    return "serialbus controll";
   case 0xd:
     return "wireless controller";
   case 0xe:
@@ -85,30 +83,39 @@ const char *classcode(uint8_t code) {
   case 0x10:
     return "enc cont";
   case 0x11:
-    return "sp cont"; // signal processing
+    return "signal process cont"; // signal processing
   default:
     return "idk";
   }
 }
 
 void pci_enumerate() {
-  for (uint32_t bus = 0; bus < 1; bus++) { // bus [1, 255] is rare b
-    for (uint32_t dev = 0; dev < 32; dev++) {
-      for (uint32_t func = 0; func < 8; func++) {
-        uint32_t id = pci_readl(bus, dev, func, 0);
-        if (id != 0xffffffff) {
-          uint32_t reg = pci_readl(bus, dev, func, 0x08);
+  uint32_t bus = 0;
+loop:
+  for (uint32_t dev = 0; dev < 32; dev++) {
+    for (uint32_t func = 0; func < 8; func++) {
+      uint32_t id = pci_readl(bus, dev, func, 0);
+      if (id != 0xffffffff) {
+        uint32_t reg = pci_readl(bus, dev, func, 0x08);
 
-          printkf("%02x:%02x.%x ", bus, dev, func);
-          printkf("%s: ", classcode((reg >> 24) & 0xff));
-          printkf("vendor=%04x device=%04x ", id & 0xffff, id >> 16);
-          printkf("class=%04x subclass=%04x\n", (reg >> 24) & 0xff, (reg >> 16) & 0xff);
+        printkf("%02x:%02x.%x ", bus, dev, func);
+        printkf("%s: ", classcode((reg >> 24) & 0xff));
+        printkf("vendor=%04x device=%04x ", id & 0xffff, id >> 16);
+        printkf("class=%04x subclass=%04x\n", (reg >> 24) & 0xff, (reg >> 16) & 0xff);
 
-          if (func == 0) {
-            uint8_t hdr = (pci_readl(bus, dev, func, 0x0c) >> 16) & 0xff;
-            if (!(hdr & 0x80)) {
-              break;
-            }
+        uint32_t k   = pci_readl(bus, dev, func, 0xc);
+        uint8_t  hdr = (k >> 16);
+
+        if ((hdr & 0x7f) == 0x1) {
+          struct pci_hdr a;
+          pci_readall(&a, bus, dev, func);
+          bus = a.tsh.bridge.ss_busnum;
+          goto loop;
+        }
+
+        if (func == 0) {
+          if (!(hdr & 0x80)) {
+            break;
           }
         }
       }
@@ -119,23 +126,34 @@ void pci_enumerate() {
 void rtl8139_init(struct pci_hdr *hdr, uint32_t bus, uint32_t dev);
 
 void pci_init() {
-  for (uint32_t bus = 0; bus < 1; bus++) { // bus [1, 255] is rare b
-    for (uint32_t dev = 0; dev < 32; dev++) {
-      for (uint32_t func = 0; func < 8; func++) {
-        uint32_t id = pci_readl(bus, dev, func, 0);
-        if (id != 0xffffffff) {
-          
-          if (id == 0x813910ec) {
-            struct pci_hdr h;
-            pci_readall(&h, bus, dev);
-            rtl8139_init(&h, bus, dev);
-          }
+  print_init("pci", "initializing pci devices...", 0);
 
-          if (func == 0) {
-            uint8_t hdr = (pci_readl(bus, dev, func, 0x0c) >> 16) & 0xff;
-            if (!(hdr & 0x80)) {
-              break;
-            }
+  uint32_t bus = 0;
+loop:
+  for (uint32_t dev = 0; dev < 32; dev++) {
+    for (uint32_t func = 0; func < 8; func++) {
+      uint32_t id = pci_readl(bus, dev, func, 0);
+      if (id != 0xffffffff) {
+
+        if (id == 0x813910ec) {
+          struct pci_hdr h;
+          pci_readall(&h, bus, dev, 0);
+          rtl8139_init(&h, bus, dev);
+        }
+
+        uint32_t k   = pci_readl(bus, dev, func, 0xc);
+        uint8_t  hdr = (k >> 16);
+
+        if ((hdr & 0x7f) == 0x1) {
+          struct pci_hdr a;
+          pci_readall(&a, bus, dev, func);
+          bus = a.tsh.bridge.ss_busnum;
+          goto loop;
+        }
+
+        if (func == 0) {
+          if (!(hdr & 0x80)) {
+            break;
           }
         }
       }

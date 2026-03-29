@@ -2,7 +2,11 @@ AS = nasm
 CC = clang
 LD = ld.lld
 
-CFLAGS = -target i386-elf -g -Wall -Wextra -ffreestanding -fno-pic -m32 -Iinclude -Oz -MMD -MP -mno-sse -msoft-float -march=i686
+CFLAGS = -target i386-elf -g -Wall -Wextra -ffreestanding -fno-pic -m32 -Iinclude -Oz -MMD -MP \
+-mno-sse -msoft-float -march=i686 -foptimize-sibling-calls -fomit-frame-pointer -fno-stack-protector -fno-builtin  \
+-fno-ident -fno-asynchronous-unwind-tables -fno-unwind-tables \
+-fno-pie -falign-functions=1 -falign-loops=1 -fno-plt -nostdlib
+
 LDFLAGS = -m elf_i386 -T src/link.ld
 
 QMFLAGS = -netdev user,id=net0 -device rtl8139,netdev=net0

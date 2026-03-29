@@ -3,6 +3,7 @@
 #include "mem/mem.h"
 #include <stddef.h>
 #include <stdint.h>
+#include "video/printf.h"
 
 static struct segdesc sd[6] = {0};
 static struct gdtr    gdtr  = {0};
@@ -21,6 +22,8 @@ static void fill_seg(struct segdesc *s, uint16_t lim, size_t base, uint8_t flg, 
 extern void flush_gdt();
 
 void set_gdt() {
+  print_init("gdt", "setting up the gdt...", 0);
+
   fill_seg(&sd[1], 0xffff, 0, 0x0c, 0x9a);
   fill_seg(&sd[2], 0xffff, 0, 0x0c, 0x92);
   fill_seg(&sd[3], 0xffff, 0, 0x0c, 0xfa);

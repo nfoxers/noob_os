@@ -115,11 +115,14 @@ void fill_idt() {
 }
 
 void set_idtr() {
+  print_init("idt", "setting up the idt...", 0);
+
   fill_idt();
   idtr_s.addr = (uint32_t)idt_g;
   idtr_s.siz  = sizeof(idt_g) - 1;
 
   asm volatile("lidt (%0)" ::"r"(&idtr_s) : "memory");
+  
 }
 
 void pic_sm(uint8_t line) {
@@ -139,7 +142,7 @@ void pic_cm(uint8_t line) {
 }
 
 void pic_eoi() { outb(PIC1_COMMAND, PIC_EOI); }
-void pic_eoi2() { outb(PIC2_COMMAND, PIC_EOI); }
+void pic_eoi2() { outb(PIC2_COMMAND, PIC_EOI); outb(PIC1_COMMAND, PIC_EOI); }
 
 void pic_remap(int offset1, int offset2) {
   outb(PIC1_COMMAND, ICW1_INIT | ICW1_ICW4);
@@ -165,6 +168,7 @@ void pic_remap(int offset1, int offset2) {
 }
 
 void init_pic() {
+  print_init("pic", "initializing pic...", 0);
   pic_remap(0x20, 0x28);
 }
 

@@ -46,6 +46,7 @@ void init_pic();
 void pic_cm(uint8_t line);
 void pic_sm(uint8_t line);
 void pic_eoi();
+void pic_eoi2();
 
 void register_ex(isr_hand r, uint8_t no);
 void register_irq(isr_hand r, uint8_t no);
