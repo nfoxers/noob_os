@@ -3,6 +3,7 @@
 #include "cpu/idt.h"
 #include "mem/mem.h"
 #include "video/printf.h"
+#include "cpu/syscall.h"
 
 #define NOPROC 10
 
@@ -191,7 +192,7 @@ void sys_yield() {
 }
 
 void general_switch() {
-  syscall();
+  syscall(SYS_YIELD);
 }
 
 void spawn_proc(void (*f)(), uint16_t cs) {
@@ -214,5 +215,5 @@ void init_root_proc() {
   root.u_gid  = 0;
   // cdir will handled by fs
 
-  register_ex(sys_yield, SYS_INTNO);
+  //register_ex(sys_yield, SYS_INTNO);
 }

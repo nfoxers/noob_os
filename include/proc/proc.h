@@ -36,6 +36,7 @@ struct direntry {
 #define F_RDONLY 0x0001
 #define F_WRONLY 0x0002 // i'll just implement them later man
 #define F_USED   0x0004
+#define F_ADDR   0x0008
 
 #define PRM_USR 0100
 #define PRM_GRP 0010
@@ -79,7 +80,7 @@ struct user {
   uint32_t u_ssize; // stack size
 
   struct inode u_cdir;
-  //struct inode *u_rdir;
+  // struct inode *u_rdir;
 
   struct file *u_ofile[NOFILE];
 };
@@ -108,8 +109,6 @@ struct proc {
 
   struct user *p_user;
 };
-
-extern void syscall();
 
 void general_switch();
 

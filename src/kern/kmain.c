@@ -13,27 +13,16 @@
 #include "proc/shell.h"
 #include <stdarg.h>
 #include "driver/serial.h"
+#include "cpu/syscall.h"
 
 extern void enditall();
-
-volatile int counter1 = 0;
-
-void testfunc() {
-  printkf("why doesnt preemptive work\n");
-  while(1) {
-    //STI;
-    counter1++;
-    //printkf("h");
-  }
-  exit_cur();
-}
 
 void kmain(void) {
   zero_bss();
   kmalloc_init();
   init_video();
   
-  printk("hello from C!\n");
+  printkf("hello from C!\n");
   init_root_proc();
 
   set_idtr();  
@@ -44,6 +33,8 @@ void kmain(void) {
   set_gdt();
   set_apic();
   
+  syscall_init();
+
   init_pit(1);
   pci_init();
   init_serial(9600);
@@ -57,7 +48,8 @@ void kmain(void) {
   
   //spawn_proc(testfunc, CS_U);
 
-  STI;
+  STI;  
+
   shell();
 
   // todo: memory safety, etc

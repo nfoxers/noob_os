@@ -33,16 +33,17 @@ struct bootsect {
 void init_fs();
 
 void list_dir(const char *path);
-int  sys_unlink(const char *path);
 
-#define O_CREAT 0x0001
+#define O_CREAT                0x0001
+#define O_JUSTGIVEMETHEADDRESS 0x0002
 
-int    sys_open(const char *fname, uint16_t flags);
-size_t sys_read(int fd, uint8_t *buf, size_t n);
-size_t sys_write(int fd, const uint8_t *buf, size_t n);
+int    fsys_open(const char *fname, uint16_t flags);
+size_t fsys_read(int fd, uint8_t *buf, size_t n);
+size_t fsys_write(int fd, const uint8_t *buf, size_t n);
+int    fsys_unlink(const char *path);
 
-int sys_mkdir(const char *path);
-int sys_close(int fd);
-int sys_cd(const char *path);
+int fsys_mkdir(const char *path);
+int fsys_close(int fd);
+int fsys_cd(const char *path);
 
 #endif

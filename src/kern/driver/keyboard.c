@@ -149,7 +149,6 @@ void init_ps2() {
   
   outb(0x64, 0x20);
   uint8_t ccb = inb(0x60);
-  printkf("ccb: %x\n", ccb);
   ccb = 0b01000100;
   outb(0x64, 0x60);
   outb(0x60, ccb);

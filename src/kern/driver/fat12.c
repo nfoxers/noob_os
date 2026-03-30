@@ -542,7 +542,9 @@ int fat_mkdir(const char *restrict path, struct inode *restrict inode) {
   return 0;
 }
 
-int sys_unlink(const char *path) {
+/* system call abstraction */
+
+int fsys_unlink(const char *path) {
   struct inode in = {0};
   if (fat_lookup(path, &in)) {
     printkf("unlink: file '%s' does not exist\n", path);
@@ -554,7 +556,7 @@ int sys_unlink(const char *path) {
   return 0;
 }
 
-int sys_mkdir(const char *path) {
+int fsys_mkdir(const char *path) {
   int fd = 1;
   for (; root_fd[fd].flags & F_USED; fd++)
     ;
@@ -570,11 +572,12 @@ int sys_mkdir(const char *path) {
 
   root_fd[fd].inode = in;
   root_fd[fd].flags = F_USED;
+  root_fd[fd].position = 0;
 
   return fd;
 }
 
-int sys_open(const char *fname, uint16_t flags) {
+int fsys_open(const char *fname, uint16_t flags) {
   int fd = 1;
   for (; root_fd[fd].flags & F_USED; fd++)
     ; // find available fd, 0 is reserved for errors
@@ -592,11 +595,16 @@ int sys_open(const char *fname, uint16_t flags) {
 
   root_fd[fd].inode = in;
   root_fd[fd].flags = F_USED;
+  root_fd[fd].position = 0;
+
+  if(flags & O_JUSTGIVEMETHEADDRESS) {
+    root_fd[fd].flags |= F_ADDR;
+  }
 
   return fd;
 }
 
-size_t sys_read(int fd, uint8_t *buf, size_t n) {
+size_t fsys_read(int fd, uint8_t *buf, size_t n) {
   struct file *f = &root_fd[fd];
   if (!(f->flags & F_USED)) {
     printkf("invalid fd %d :(\n", fd);
@@ -605,14 +613,18 @@ size_t sys_read(int fd, uint8_t *buf, size_t n) {
 
   struct inode *in   = f->inode;
   uint16_t      read = 0;
-  if (in->type == INODE_FILE) {
+  if (in->type == INODE_FILE && !(f->flags & F_ADDR)) {
     read = read_file(in, buf, n, f->position);
     f->position += read;
+  } else if(in->type == INODE_FILE && f->flags & F_ADDR) {
+    kmemcpy(buf + f->position, (uint8_t*)get_addr(in->cluster0) + f->position, n);
+    f->position += n;
+    read = n;
   }
   return read;
 }
 
-size_t sys_write(int fd, const uint8_t *buf, size_t n) {
+size_t fsys_write(int fd, const uint8_t *buf, size_t n) {
   struct file *f = &root_fd[fd];
   if (!(f->flags & F_USED)) {
     printkf("invalid fd %d :(\n", fd);
@@ -630,7 +642,7 @@ size_t sys_write(int fd, const uint8_t *buf, size_t n) {
   return write;
 }
 
-int sys_close(int fd) {
+int fsys_close(int fd) {
   if (!(root_fd[fd].flags & F_USED)) {
     return 1;
   }
@@ -641,7 +653,7 @@ int sys_close(int fd) {
   return 0;
 }
 
-int sys_cd(const char *path) {
+int fsys_cd(const char *path) {
   struct inode in = {0};
   if(fat_lookup(path, &in)) {
     printkf("%s: doesnt exit\n", path);

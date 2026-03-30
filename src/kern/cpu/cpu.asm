@@ -68,7 +68,7 @@ isr_stub:
 intret:
   pop ds
   pop es
-  pop fs
+  pop fs 
   pop gs
   popad
 
@@ -96,11 +96,38 @@ irq_stub:
   call irq_handler
   add esp, 4
 
+  jmp intret
+
+extern sys_rval
+
+sys_stub:
+  pushad
+  push gs
+  push fs
+  push es
+  push ds
+
+  mov ax, 0x10
+  mov es, ax
+  mov ds, ax
+  mov ss, ax
+  mov gs, ax
+  mov fs, ax
+
+  mov eax, esp ; eax = struct regs *
+  mov [eax + regs.esp], esp
+
+  push esp
+  call isr_handler
+  pop eax
+
   pop ds
   pop es
-  pop fs
+  pop fs 
   pop gs
   popad
+
+  mov eax, [sys_rval]
 
   add esp, 8
   iret
@@ -188,4 +215,8 @@ _irq 13
 _irq 14
 _irq 15
 
-_ex_ne 48
+global _ex48
+_ex48:
+  push dword 0
+  push dword 48
+  jmp sys_stub
