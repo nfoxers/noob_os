@@ -25,18 +25,48 @@
 #define PRM_W 02
 #define PRM_X 01
 
-#define DIRENT_MAXSIZ 10
+#define DT_BLK  0x01 // block
+#define DT_CHR  0x02 // char
+#define DT_DIR  0x04 // directory
+#define DT_FIFO 0x08 // named fifo
+#define DT_LNK  0x10 // symlink
+#define DT_REG  0x20 // regular file
+#define DT_SOCK 0x40 // unix sock
+#define DT_UNK  0x80 // unknown
+
+#define DT_MAXDIR 10
+
+#define DIRENT_MAXSIZ 32
 #define CWD_MAXSIZ    50
 
 struct inode;
 struct file;
 
-typedef uint32_t (*readf_t)(struct inode *, uint32_t, uint32_t, uint8_t *);
+typedef uint32_t off_t;
+
+typedef struct dirstream {
+  uint8_t count;
+  size_t  size;
+  uint8_t type;
+
+  char data[DIRENT_MAXSIZ];
+} DIR;
+
+struct dirent {
+  off_t    d_off;
+  uint16_t d_reclen;
+  uint8_t  d_type;
+
+  char d_name[DIRENT_MAXSIZ];
+};
 
 struct inode_ops {
   struct inode *(*lookup)(struct inode *dir, const char *name);
   int (*creat)(struct inode *dir, const char *name, uint16_t flg);
   int (*unlink)(struct inode *dir, const char *name);
+
+  DIR *(*opendir)(struct inode *dir);
+  int (*closedir)(DIR *dir);
 };
 
 struct file_ops {
@@ -60,19 +90,16 @@ struct inode {
   struct file_ops  fops;
 };
 
-struct dentry {
-  char          name[DIRENT_MAXSIZ];
-  struct inode *in;
-};
-
 struct file {
-  struct inode   *inode;
-  uint16_t        position;
-  uint16_t        flags;
+  struct inode *inode;
+  uint16_t      position;
+  uint16_t      flags;
 };
 
 char *path_canon(const char *cwd, const char *path);
 
-struct inode *kopen(const char *path);
+struct inode *lookup_vfs(const char *path);
+
+DIR *opendir_ffs(const char *path);
 
 #endif

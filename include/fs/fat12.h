@@ -71,4 +71,8 @@ int fsys_mkdir(const char *path);
 int fsys_close(int fd);
 int fsys_cd(const char *path);
 
+int lsdir(const char *path);
+
+#define ROOT_ADDR (struct direntry*)0x8600
+
 #endif

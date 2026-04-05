@@ -5,6 +5,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+extern struct inode rootinode;
+
 uint32_t read_fs(struct inode *in, uint32_t off, size_t siz, uint8_t *b) {
   if (in->fops.read)
     return in->fops.read(in, b, off, siz);
@@ -27,7 +29,7 @@ void close_fs(struct inode *in) {
     in->fops.close(in);
 }
 
-struct inode *finddir_fs(struct inode *in, const char *name) {
+struct inode *lookup_fs(struct inode *in, const char *name) {
   if ((in->type == INODE_DIR) && in->ops.lookup) {
     return in->ops.lookup(in, name);
   }
@@ -97,9 +99,12 @@ char *path_canon(const char *cwd, const char *path) {
   return buf;
 }
 
-struct inode *kopen(const char *path) {
+struct inode *lookup_vfs_r(const char *path, char **save) {
   char *cwd = p_curproc->p_user->u_cdirname;
+  printkf("cwd: %s pth: %s\n", cwd, path);
+
   char *pth = path_canon(cwd, path);
+  *save = pth;
 
   int mdepth = 0;
   int depth = 0; // skip the initial /
@@ -107,12 +112,16 @@ struct inode *kopen(const char *path) {
     if(pth[i] == '/') mdepth++;
   }
 
-  struct inode *inode = &root_dir;
+  struct inode *inode = &rootinode;
   char *sv;
 
   char *tok = strtok_r(pth, "/", &sv);
+  
+  printkf("k: %s\n", pth);
+
   while (tok) {
-    inode = finddir_fs(inode, tok);
+    inode = lookup_fs(inode, tok);
+    printkf("name: %s\n", tok);
 
     if (!inode) {
       free(pth);
@@ -133,3 +142,40 @@ struct inode *kopen(const char *path) {
   free(pth);
   return inode;
 }
+
+struct inode *lookup_vfs(const char *path) {
+  char *sav;
+  struct inode *ret = lookup_vfs_r(path, &sav);
+  return ret;
+}
+
+DIR *opendir_fs(struct inode *in) {
+  if(in && in->ops.opendir) {
+    return in->ops.opendir(in);
+  }
+  return NULL;
+}
+
+DIR *opendir_ffs(const char *path) {
+  if(!path) return NULL;
+  struct inode *in = lookup_vfs(path);
+  
+  return opendir_fs(in);
+};
+
+int fsys_cd(const char *path) {
+  char *pth;
+
+  struct inode *inp = lookup_vfs_r(path, &pth);
+  if(!inp) {
+    printkf("%s: no such file\n");
+    return -1;
+  }
+
+  memcpy(&p_curproc->p_user->u_cdir, inp, sizeof(struct inode));
+  strcpy(p_curproc->p_user->u_cdirname, pth);
+
+  free(inp);
+  return 0;
+}
+

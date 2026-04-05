@@ -112,11 +112,9 @@ int c_exit(char **argv, int argc) {
 
 int c_ls(char **argv, int argc) {
   if (argc == 1) {
-    list_dir("");
-    return 0;
+    return lsdir(".");
   }
-  list_dir(argv[1]);
-  return 0;
+  return lsdir(argv[1]);
 }
 
 int c_rm(char **argv, int argc) {
@@ -241,7 +239,7 @@ int c_mused(char **argv, int argc) {
 
 int c_copen(char **argv, int argc) {
   ARGS_USELESS;
-  struct inode *k = kopen("KERNEL.BIN");
+  struct inode *k = lookup_vfs("KERNEL.BIN");
   free(k);
   printkf("mused: %d\n", getused());
   return 0;

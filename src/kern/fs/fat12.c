@@ -125,23 +125,55 @@ void set_perms(struct inode *in, uint8_t fatt) {
 int fat_lookup(const char *restrict path, struct inode *restrict inode);
 
 struct inode *finddir_fat(struct inode *in, const char *path) {
-  struct inode *inode = malloc(sizeof(struct inode)); 
+  struct inode *inode = malloc(sizeof(struct inode));
   memcpy(inode, in, sizeof(struct inode));
-  if(fat_lookup(path, inode)) {
+  if (fat_lookup(path, inode)) {
     free(inode);
     return NULL;
   }
-  
+
   return inode;
 }
 
+void *get_addr(uint16_t lc) {
+  return (void *)(fsinfo.data_addr + (lc - 2) * 1024);
+}
+
+DIR *opendir_fat(struct inode *in) {
+  if (!in || in->type != INODE_DIR)
+    return NULL;
+
+  DIR *d = malloc(sizeof(DIR) * DT_MAXDIR);
+
+  printkf("root: %x\n", fsinfo.root_addr);
+
+  struct direntry *dr = in->entaddr == root_dir.entaddr ? root_dir.entaddr : (struct direntry *)get_addr(in->entaddr->low_cluster);
+
+  int i;
+  for (i = 0; i < DT_MAXDIR; i++, dr++) {
+    if (!dr->fname[0])
+      break;
+    if ((uint8_t)dr->fname[0] == 0xe5)
+      continue;
+
+    d[i].size = dr->size;
+    snprintkf(d[i].data, DIRENT_MAXSIZ, "% 8.8s % 3.3s", dr->fname, dr->ext);
+    d[i].type = dr->fatt & FAT_SUBDIR ? INODE_DIR : INODE_FILE;
+  }
+
+  d[0].count = i;
+
+  return d;
+}
+
 void set_vfs(struct inode *in) {
-  in->ops.lookup = finddir_fat;
+  in->ops.lookup  = finddir_fat;
+  in->ops.opendir = opendir_fat;
 }
 
 int fat_lookup_r(const char *restrict path, struct inode *restrict inode, char **restrict saveptr) {
   // todo: long filanames
-  *saveptr      = path_canon(p_curproc->p_user->u_cdirname, path);
+  *saveptr      = path_canon("/", path);
   char *pathbuf = strdup(*saveptr);
 
   if (pathbuf[0] == '/' && pathbuf[1] == 0) {
@@ -365,10 +397,6 @@ void fat_format_name(const char *restrict name, char out[restrict 11]) {
   free(tmp);
 }
 
-void *get_addr(uint16_t lc) {
-  return (void *)(fsinfo.data_addr + (lc - 2) * 1024);
-}
-
 void list_dir(const char *path) {
   struct inode in = {0};
   if (fat_lookup(path, &in)) {
@@ -402,6 +430,23 @@ void list_dir(const char *path) {
       printk("       ");
     printkf("%d\n", de->size);
   }
+}
+
+int lsdir(const char *path) {
+  printkf("cwd: %s\n", p_curproc->p_user->u_cdirname);
+  DIR *d = opendir_ffs(path);
+  if(!d) return 1;
+
+  for(int i = 0; i < d->count; i++) {
+        printkf("%s", d[i].data);
+    if (d[i].type & INODE_DIR)
+      printk(" <DIR> ");
+    else
+      printk("       ");
+    printkf("%d\n", d[i].size);
+  }
+
+  return 0;
 }
 
 void fat_find_free(struct inode *restrict in, struct direntry **restrict d) {
@@ -672,19 +717,3 @@ int fsys_close(int fd) {
   return 0;
 }
 
-int fsys_cd(const char *path) {
-  char *pth;
-
-  struct inode in = {0};
-  if (fat_lookup_r(path, &in, &pth)) {
-    printkf("%s: doesnt exit\n", path);
-    return 0;
-  } else if (in.type == INODE_FILE) {
-    printkf("not a dir\n");
-    return 0;
-  }
-
-  memcpy(&p_curproc->p_user->u_cdir, &in, sizeof(struct inode));
-  strcpy(p_curproc->p_user->u_cdirname, pth);
-  return 0;
-}
