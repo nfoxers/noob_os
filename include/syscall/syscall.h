@@ -1,0 +1,48 @@
+#ifndef SYSCALL_H
+#define SYSCALL_H
+
+#include "stddef.h"
+#include "stdint.h"
+
+#define SYS_RSYS    0
+#define SYS_EXIT    1
+#define SYS_FORK    2
+#define SYS_READ    3
+#define SYS_WRITE   4
+#define SYS_OPEN    5
+#define SYS_CLOSE   6
+#define SYS_WAITPID 7
+
+#define SYS_YIELD  8 // no
+#define SYS_CHDIR  9
+#define SYS_MKDIR  10
+#define SYS_UNLINK 11
+
+typedef int      pid_t;
+typedef int      ssize_t;
+typedef uint32_t mode_t;
+
+void     syscall_init();
+uint32_t syscall(uint32_t nr, ...);
+
+// wrappers
+
+long  restart_syscall(void);
+void  exit(int status);
+pid_t fork();
+
+ssize_t read(unsigned int fd, void *buf, size_t count);
+ssize_t write(unsigned int fd, const void *buf, size_t count);
+
+int   open(const char *pathname, int flags);
+int   close(int fd);
+pid_t waitpid(pid_t pid, int *stat_addr, int options);
+
+// ill-defined unstandard (yet) section
+
+int sched_yield();
+int chdir(const char *path);
+int mkdir(const char *pathname, mode_t mode);
+int unlink(const char *path);
+
+#endif

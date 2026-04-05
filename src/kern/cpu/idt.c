@@ -172,10 +172,35 @@ void init_pic() {
   pic_remap(0x20, 0x28);
 }
 
+const char *excname[] = {
+  "div err",
+  "debug",
+  "nmi",
+  "breakdown", // i.e. breakpoint
+  "overflow",
+  "bound range err",
+  "invalid opcode",
+  "invalid device",
+  "double fault",
+  "coproc seg overrun",
+  "invalid tss",
+  "segment not presnt",
+  "stack segment",
+  "general protection fault",
+  "page fault",
+  "res",
+  "x87 float exc",
+  "alignment check",
+  "machine check",
+  "simd float exc",
+  "virtualization exc",
+  "control protection exc",
+};
+
 void isr_handler(struct regs *r) {
   isr_hand e = exception_hand[r->int_no];
   if (!e) {
-    printkf("interrupt at eip=%p, exc %d\n", r->eip, r->int_no);
+    printkf("interrupt at eip=%p, exc %d (%s)\n", r->eip, r->int_no, r->int_no < sizeof(excname)/sizeof(excname[0]) ? excname[r->int_no] : "out of bounds");
     printk("no exception handler! halting now...\n");
     asm volatile("cli");
     asm volatile("hlt");

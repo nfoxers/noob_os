@@ -1,11 +1,13 @@
 #include "cpu/ccpu.h"
 #include "cpu/gdt.h"
 #include "cpu/idt.h"
-#include "driver/fat12.h"
+#include "fs/fat12.h"
 #include "driver/keyboard.h"
 #include "driver/pci.h"
 #include "driver/time.h"
+#include "fs/vfs.h"
 #include "mem/mem.h"
+#include "mem/paging.h"
 #include "proc/proc.h"
 #include "stdint.h"
 #include "video/printf.h"
@@ -13,7 +15,7 @@
 #include "proc/shell.h"
 #include <stdarg.h>
 #include "driver/serial.h"
-#include "cpu/syscall.h"
+#include "syscall/syscall.h"
 
 extern void enditall();
 
@@ -38,6 +40,7 @@ void kmain(void) {
   init_pit(1);
   pci_init();
   init_serial(9600);
+  fpu_init();
 
   smbios_scan();
 
@@ -46,10 +49,9 @@ void kmain(void) {
 
   print_time();
   
-  //spawn_proc(testfunc, CS_U);
+  page_init();
 
   STI;  
-
   shell();
 
   // todo: memory safety, etc

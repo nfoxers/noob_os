@@ -22,57 +22,61 @@ uint8_t dlim(char c, const char *delim) {
   return 0;
 }
 
-char *kstrtok(char *restrict str, const char *restrict delim) {
-  static char *next;
-
+char *strtok_r(char *restrict str, const char *restrict delim, char **saveptr) {
   char *start;
+  char **next = saveptr;
 
   if (str != NULL)
-    next = str;
-  if (next == NULL)
+    *next = str;
+  if (!next || !*next)
     return NULL;
 
-  while (*next && dlim(*next, delim))
-    next++;
+  while (**next && dlim(**next, delim))
+    (*next)++;
 
-  if (*next == '\0') {
-    next = NULL;
+  if (**next == '\0') {
+    *next = NULL;
     return NULL;
   }
 
-  start = next;
+  start = *next;
 
-  while (*next && !dlim(*next, delim))
-    next++;
+  while (**next && !dlim(**next, delim))
+    (*next)++;
 
-  if (*next) {
-    *next = '\0';
-    next++;
+  if (**next) {
+    **next = '\0';
+    (*next)++;
   } else {
-    next = NULL;
+    *next = NULL;
   }
 
   return start;
 }
 
-void kstrncpy(char *restrict dst, const char *restrict src, size_t siz) {
+char *strtok(char *restrict str, const char *restrict delim) {
+  static char *saveptr;
+  return strtok_r(str, delim, &saveptr);
+}
+
+void strncpy(char *restrict dst, const char *restrict src, size_t siz) {
   while (siz--) {
     *dst++ = *src++;
   }
 }
 
-void kstrcpy(char *restrict dst, const char *restrict src) {
+void strcpy(char *restrict dst, const char *restrict src) {
   while ((*dst++ = *src++))
     ;
 }
 
-void kmemcpy(void *restrict dst, const void *restrict src, size_t siz) {
+void memcpy(void *restrict dst, const void *restrict src, size_t siz) {
   for (; siz > 0; siz--) {
     *(uint8_t *)dst++ = *(uint8_t *)src++;
   }
 }
 
-uint8_t kmemcmp(const void *restrict s1, const void *restrict s2, size_t siz) {
+uint8_t memcmp(const void *s1, const void *s2, size_t siz) {
   while (siz && (*(uint8_t *)s1 == *(uint8_t *)s2))
     s1++, s2++, siz--;
   if (siz == 0)
@@ -80,17 +84,17 @@ uint8_t kmemcmp(const void *restrict s1, const void *restrict s2, size_t siz) {
   return *(uint8_t *)s1 - *(uint8_t *)s2;
 }
 
-void kmemset(void *s, int c, size_t len) {
+void memset(void *s, int c, size_t len) {
   asm volatile("rep stosb" : "+D"(s), "+c"(len) : "a"((uint8_t)c) : "memory");
 }
 
-uint8_t kstrcmp(const char *restrict s, const char *restrict d) {
+uint8_t strcmp(const char *s, const char *d) {
   while (*s == *d && *s)
     s++, d++;
   return *(uint8_t *)s - *(uint8_t *)d;
 }
 
-uint8_t kstrncmp(const char *restrict s1, const char *restrict s2, size_t siz) {
+uint8_t strncmp(const char *s1, const char *s2, size_t siz) {
   while (siz && *s1 && (*s1 == *s2)) {
     s1++;
     s2++;
@@ -103,7 +107,7 @@ uint8_t kstrncmp(const char *restrict s1, const char *restrict s2, size_t siz) {
   return *(uint8_t *)s1 - *(uint8_t *)s2;
 }
 
-char *kstrrchr(const char *s, int c) {
+char *strrchr(const char *s, int c) {
   const char *l = NULL;
   while (*s) {
     if (*s == (char)c)
@@ -115,7 +119,7 @@ char *kstrrchr(const char *s, int c) {
   return (char *)l;
 }
 
-size_t kstrlen(const char *s) {
+size_t strlen(const char *s) {
   const char *d = s;
   while ((*d++))
     ;
@@ -128,6 +132,12 @@ void zero_bss() {
     *p++ = 0;
   }
   heap_ptr = &__bss_end__;
+}
+
+char *strdup(const char *s) {
+  char *a = malloc(strlen(s)+1);
+  memcpy(a, s, strlen(s)+1);
+  return a;
 }
 
 #define MAX_ORD 20
@@ -226,11 +236,15 @@ static void km_init(struct alloc *a, void *mem, size_t siz) {
   a->free[max_ord] = init;
 }
 
+static size_t used_mem = 0;
+
 static void *km_alloc(struct alloc *a, size_t siz) {
   siz = ALIGN_UP(siz, sizeof(void*));
 
   size_t total = siz + sizeof(struct alloc_hdr);
   int ord = size2ord(total);
+
+  used_mem += ord_siz(ord);
 
   if (ord > MAX_ORD)
     return NULL;
@@ -268,6 +282,8 @@ static void km_free(struct alloc *a, void *ptr) {
   struct alloc_hdr *h = ((struct alloc_hdr *)ptr) - 1;
   int ord = h->ord;
 
+  used_mem -= ord_siz(ord);
+
   uintptr_t off = ptr2off(a, (void *)h);
 
   while (ord < MAX_ORD) {
@@ -303,18 +319,21 @@ void kmalloc_init() {
   km_init(&kalloc, mem, siz);
 }
 
-void *kmalloc(size_t siz) { // todo: low-address priority allocation
-  return km_alloc(&kalloc, siz);
+void *malloc(size_t siz) { // todo: low-address priority allocation
+  void *ptr = km_alloc(&kalloc, siz);
+  //printkf("malloc at %x\n", ptr);
+  return ptr;
 }
 
-void kfree(void *ptr) {
+void free(void *ptr) {
+  //printkf("free at %x\n", ptr);
   km_free(&kalloc, ptr);
 }
 
-void *kmalloc_align(size_t siz, size_t align) {
+void *malloc_align(size_t siz, size_t align) {
   if((align & (align - 1)) != 0) return NULL;
 
-  void *raw = kmalloc(siz + align - 1 + sizeof(void *));
+  void *raw = malloc(siz + align - 1 + sizeof(void *));
   if(!raw) return NULL;
 
   uintptr_t rawaddr = (uintptr_t)raw + sizeof(void *);
@@ -324,7 +343,11 @@ void *kmalloc_align(size_t siz, size_t align) {
   return (void*)a_addr;
 }
 
-void kfree_align(void *ptr) {
+void free_align(void *ptr) {
   void *raw = ((void**)ptr)[-1];
-  kfree(raw);
+  free(raw);
+}
+
+size_t getused() {
+  return used_mem;
 }

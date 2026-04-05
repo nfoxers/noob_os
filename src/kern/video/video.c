@@ -44,8 +44,8 @@ void readcursor() {
 
 void scroll_once() {
   cursor -= 80;
-  kmemcpy(VGA, VGA + 80 * 2, 80 * 25 * 2);
-  kmemcpy(vbuf, vbuf + 80 * 2, 80 * 25 * 2 * V_MAXPAGE);
+  memcpy(VGA, VGA + 80 * 2, 80 * 25 * 2);
+  memcpy(vbuf, vbuf + 80 * 2, 80 * 25 * 2 * V_MAXPAGE);
   vflush();
 }
 
@@ -120,7 +120,7 @@ void clr_scr() {
 }
 
 void vflush() {
-  kmemcpy(VGA, vbuf + bottom * 2 * 80, 80 * 25 * 2);
+  memcpy(VGA, vbuf + bottom * 2 * 80, 80 * 25 * 2);
 }
 
 void vscroll_down() {
@@ -142,8 +142,8 @@ void vscroll_up() {
 }
 
 void init_video() {
-  vbuf = kmalloc(80 * 25 * 2 * V_MAXPAGE); // capacity of V_MAXPAGE 'pages' (i.e one full vga screen)
-  kmemcpy(vbuf, VGA, 80 * 25 * 2);
+  vbuf = malloc(80 * 25 * 2 * V_MAXPAGE); // capacity of V_MAXPAGE 'pages' (i.e one full vga screen)
+  memcpy(vbuf, VGA, 80 * 25 * 2);
   // clr_scr();
 
   readcursor();

@@ -51,7 +51,7 @@ const char *getstr(struct smbhead *c, uint32_t idx) {
   const char *strtab = (const char *)c + c->len;
   idx--;
   while(idx) {
-    strtab = strtab + kstrlen(strtab);
+    strtab = strtab + strlen(strtab)+1;
     idx--;
   }
   return strtab;
@@ -78,7 +78,7 @@ void smbios_scan(void) {
   uint8_t chk = 0;
 
   while(eps <= (uint8_t*)SMB_END) {
-    if(!kmemcmp(eps, "_SM3_", 5)) {
+    if(!memcmp(eps, "_SM3_", 5)) {
       len = eps[6];
       chk = 0;
       for(i = 0; i < len; i++) {

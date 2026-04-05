@@ -1,13 +1,17 @@
+#include "cpu/gdt.h"
 #include "cpu/idt.h"
-#include "driver/fat12.h"
 #include "driver/keyboard.h"
 #include "driver/pci.h"
 #include "driver/time.h"
+#include "fs/fat12.h"
+#include "fs/vfs.h"
 #include "kassert.h"
 #include "mem/mem.h"
+#include "mem/paging.h"
+#include "proc/proc.h"
+#include "syscall/syscall.h"
 #include "video/printf.h"
 #include "video/video.h"
-#include "cpu/syscall.h"
 
 #define ARGS_USELESS \
   (void)argv;        \
@@ -22,8 +26,8 @@ void bf() {
   uint8_t dbuf[BF_BUFSIZ]; // data buffer
   uint8_t cbuf[BF_BUFSIZ]; // command buffer
 
-  kmemset(dbuf, 0, BF_BUFSIZ);
-  kmemset(cbuf, 0, BF_BUFSIZ);
+  memset(dbuf, 0, BF_BUFSIZ);
+  memset(cbuf, 0, BF_BUFSIZ);
 
   printk("enter yo brainfuh program:\n");
 
@@ -120,8 +124,8 @@ int c_rm(char **argv, int argc) {
     printk("specify thy path\n");
     return 2;
   }
-  //sys_unlink(argv[1]);
-  syscall(SYS_UNLINK, argv[1]);
+
+  unlink(argv[1]);
   return 0;
 }
 
@@ -130,8 +134,9 @@ int c_touch(char **argv, int argc) {
     printk("specify thy path\n");
     return 2;
   }
-  int fd = syscall(SYS_OPEN, argv[1], O_CREAT);
-  syscall(SYS_CLOSE, fd);
+
+  int fd = open(argv[1], O_CREAT);
+  close(fd);
   return 0;
 }
 
@@ -167,48 +172,49 @@ int c_mkdir(char **argv, int argc) {
     return 2;
   }
 
-  //sys_mkdir(argv[1]);
-  int fd = syscall(SYS_MKDIR, argv[1]);
-  if(!fd) return 1;
-  syscall(SYS_CLOSE, fd);
+  // sys_mkdir(argv[1]);
+  int fd = mkdir(argv[1], 0);
+  if (!fd)
+    return 1;
+  close(fd);
   return 0;
 }
 
 int c_cd(char **argv, int argc) {
   if (argc == 1)
     return 0;
-  //sys_cd(argv[1]);
-  syscall(SYS_CHDIR, argv[1]);
+  chdir(argv[1]);
   return 0;
 }
 
 int c_cat(char **argv, int argc) {
-  if(argc == 1) {
+  if (argc == 1) {
     printkf("specify your file please good sir\n");
     return 2;
   }
 
-  int fd = syscall(SYS_OPEN, argv[1], 0);
-  if(!fd) return 1;
+  int fd = open(argv[1], 0);
+  if (!fd)
+    return 1;
 
-  uint8_t *buf = kmalloc(1024);
+  uint8_t *buf = malloc(1024);
 
   printkf("fd: %d\n\n", fd);
-  
-  syscall(SYS_READ, fd, buf, 1024);
+
+  read(fd, (char *)buf, 1024);
 
   printkf("%.1024s\n", buf);
 
-  syscall(SYS_CLOSE, fd);
-  kfree(buf);
+  close(fd);
+  free(buf);
   return 0;
 }
 
 int c_mall(char **argv, int argc) {
   ARGS_USELESS;
-  void *a = kmalloc(1);
+  void *a = malloc(1);
   printkf("addr: %p\n", a);
-  kfree(a);
+  free(a);
   return 0;
 }
 
@@ -217,26 +223,63 @@ int c_h(char **argv, int argc) {
   printkf("this will erase the content of cr0 and kill the kernel. continue? [n] ");
   char c = getch();
   putchr('\n');
-  if(c != 'y') return 2;
+  if (c != 'y')
+    return 2;
 
   asm volatile(
-    "mov %%cr0, %%eax\n"
-    "xor %%eax, %%eax\n"
-    "mov %%eax, %%cr0\n"
-    ::: "eax"
-  );
+      "mov %%cr0, %%eax\n"
+      "xor %%eax, %%eax\n"
+      "mov %%eax, %%cr0\n" ::: "eax");
+  return 0;
+}
+
+int c_mused(char **argv, int argc) {
+  ARGS_USELESS;
+  printkf("used dynamic memory: %dB\n", getused());
+  return 0;
+}
+
+int c_copen(char **argv, int argc) {
+  ARGS_USELESS;
+  struct inode *k = kopen("KERNEL.BIN");
+  free(k);
+  printkf("mused: %d\n", getused());
+  return 0;
+}
+
+#define LDADDR 0x00
+
+int c_exec(char **argv, int argc) {
+  if (argc != 2)
+    return 2;
+  int fd = open(argv[1], 0);
+  if(!fd) return 1;
+
+  uint8_t *buf = malloc_align(0x1000, 0x1000);
+
+  read(fd, (char*)buf, 1024);
+  close(fd);
+
+
+  void (*f)() = (void (*)())buf;
+
+  alloc_page(0, (uint32_t)buf);
+
+  spawn_proc(f, CS_K, NULL);
+
+  //free_align(buf);
   return 0;
 }
 
 static char const *const cmds[] = {
     "help", "exit", "ls", "rm", "touch", "clear", "time", "bf", "lspci", "mkdir", "cd",
-  "cat", "mall", "h"};
+    "cat", "mall", "h", "mused", "exec", "copen"};
 
 int c_help(char **argv, int argc) {
   ARGS_USELESS;
   printk("supported commands: ");
 
-  for(uint32_t i = 0; i < sizeof(cmds)/sizeof(cmds[0]); i++) {
+  for (uint32_t i = 0; i < sizeof(cmds) / sizeof(cmds[0]); i++) {
     printkf("%s ", cmds[i]);
   }
 
@@ -246,9 +289,7 @@ int c_help(char **argv, int argc) {
 
 static int (*const ftab[])(char *argv[NARGS], int argc) = {
     c_help, c_exit, c_ls, c_rm, c_touch, c_clear, c_time, c_bf, c_lspci, c_mkdir, c_cd,
-  c_cat, c_mall, c_h};
-
-
+    c_cat, c_mall, c_h, c_mused, c_exec, c_copen};
 
 void shell() {
   static char buf[128];
@@ -265,29 +306,31 @@ void shell() {
       continue;
     }
 
-    char   *tok = kstrtok(buf, " ");
+    char *sv;
+    char   *tok = strtok_r(buf, " ", &sv);
     uint8_t idx = 0;
-    char *argv[NARGS];
+    char   *argv[NARGS];
     while (tok) {
       argv[idx] = tok;
-      tok = kstrtok(NULL, " ");
+      tok       = strtok_r(NULL, " ", &sv);
       idx++;
-      if(idx >= NARGS) break;
+      if (idx >= NARGS)
+        break;
     }
 
     int found = 0;
-    int ret = 0;
+    int ret   = 0;
     for (uint32_t i = 0; i < sizeof(ftab) / sizeof(ftab[0]); i++) {
-      if (!kstrcmp(buf, cmds[i])) {
+      if (!strcmp(buf, cmds[i])) {
         found++;
         ret = ftab[i](argv, idx);
         break;
       }
     }
-    if(!found) {
+    if (!found) {
       printkf("%s: command not found\n", argv[0]);
     }
-    if(ret) {
+    if (ret) {
       printkf("nonzero return: %d\n", ret);
     }
   }

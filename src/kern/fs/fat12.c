@@ -1,5 +1,6 @@
-#include "driver/fat12.h"
+#include "fs/fat12.h"
 #include "driver/time.h"
+#include "fs/vfs.h"
 #include "mem/mem.h"
 #include "proc/proc.h"
 #include "video/printf.h"
@@ -29,9 +30,11 @@ struct file root_fd[NOFILE] = {0};
 extern struct inode root_dir;
 extern struct proc *volatile p_curproc;
 
+void set_vfs(struct inode *);
+
 void init_fs() {
   print_init("fat", "initializing filesystem driver...", 0);
-  
+
   if (BS->bootsig != 0xaa55) {
     printk("mismatching boot signatures, either corrupt memory or idk\n");
     return;
@@ -49,13 +52,15 @@ void init_fs() {
   fsinfo.data_addr    = fsinfo.data_start * 512 + 0x7c00;
   fsinfo.data_sectors = BS->total_sec - fsinfo.data_start;
 
-  root_dir.type = INODE_DIR;
-  root_dir.cluster0 = 0;
-  root_dir.entaddr = fsinfo.root_addr;
-  root_dir.size = 0;
+  root_dir.type       = INODE_DIR;
+  root_dir.cluster0   = 0;
+  root_dir.entaddr    = fsinfo.root_addr;
+  root_dir.size       = 0;
   root_dir.permission = 0766;
 
-  kmemcpy(&p_curproc->p_user->u_cdir, &root_dir, sizeof(struct inode));
+  set_vfs(&root_dir);
+
+  memcpy(&p_curproc->p_user->u_cdir, &root_dir, sizeof(struct inode));
 }
 
 uint16_t fat_value(uint16_t cluster) {
@@ -108,7 +113,7 @@ int fat_name_match(struct direntry *restrict e, const char *restrict name) {
   else
     snprintkf(fatname, sizeof(fatname), "%s", fname);
 
-  return !kstrcmp(fatname, name);
+  return !strcmp(fatname, name);
 }
 
 void set_perms(struct inode *in, uint8_t fatt) {
@@ -117,13 +122,29 @@ void set_perms(struct inode *in, uint8_t fatt) {
     in->permission &= ~(PRM_W * (PRM_USR | PRM_GRP | PRM_OTH));
 }
 
-int fat_lookup(const char *restrict path, struct inode *restrict inode) {
-  // todo: long filanames
-  char pathbuf[32];
-  kstrncpy(pathbuf, path, sizeof(pathbuf));
-  uint8_t root = 0;
+int fat_lookup(const char *restrict path, struct inode *restrict inode);
 
-  if(pathbuf[0] == '/' && pathbuf[1] == 0) {
+struct inode *finddir_fat(struct inode *in, const char *path) {
+  struct inode *inode = malloc(sizeof(struct inode)); 
+  memcpy(inode, in, sizeof(struct inode));
+  if(fat_lookup(path, inode)) {
+    free(inode);
+    return NULL;
+  }
+  
+  return inode;
+}
+
+void set_vfs(struct inode *in) {
+  in->ops.lookup = finddir_fat;
+}
+
+int fat_lookup_r(const char *restrict path, struct inode *restrict inode, char **restrict saveptr) {
+  // todo: long filanames
+  *saveptr      = path_canon(p_curproc->p_user->u_cdirname, path);
+  char *pathbuf = strdup(*saveptr);
+
+  if (pathbuf[0] == '/' && pathbuf[1] == 0) {
     inode->cluster0   = 0;
     inode->entaddr    = root_dir.entaddr;
     inode->size       = 0;
@@ -132,29 +153,14 @@ int fat_lookup(const char *restrict path, struct inode *restrict inode) {
     return 0;
   }
 
-  if(pathbuf[0] == '/') {
-    root = 1;
-  }
-
-  char *component = kstrtok(pathbuf, "/");
+  char *sv;
+  char *component = strtok_r(pathbuf, "/", &sv);
 
   struct direntry *dir;
 
   uint16_t cluster = 0; // root
   int      entries = BS->roots;
   int      found   = 0;
-
-  if(!root) {
-    cluster = p_curproc->p_user->u_cdir.cluster0;
-    if(!component) {
-      inode->cluster0   = p_curproc->p_user->u_cdir.cluster0;
-      inode->entaddr    = p_curproc->p_user->u_cdir.entaddr;
-      inode->size       = 0;
-      inode->type       = INODE_DIR;
-      inode->permission = p_curproc->p_user->u_cdir.permission;
-      return 0;
-    }
-  }
 
   while (component) {
     found = 0;
@@ -185,21 +191,29 @@ int fat_lookup(const char *restrict path, struct inode *restrict inode) {
         inode->size     = dir[i].size;
 
         set_perms(inode, dir[i].fatt);
+        set_vfs(inode);
 
         break;
       }
     }
 
-    if (!found)
+    if (!found) {
+      free(pathbuf);
       return 1;
+    }
 
-    component = kstrtok(NULL, "/");
+    component = strtok_r(NULL, "/", &sv);
   }
 
-  if (!found)
-    return 1;
-
+  free(pathbuf);
   return 0;
+}
+
+int fat_lookup(const char *restrict path, struct inode *restrict inode) {
+  char *ptr;
+  int   ret = fat_lookup_r(path, inode, &ptr); // ptr is malloc'd inside
+  free(ptr);
+  return ret;
 }
 
 uint16_t read_file(struct inode *restrict inode, uint8_t *restrict data, uint16_t req_siz, size_t offset) {
@@ -222,7 +236,7 @@ uint16_t read_file(struct inode *restrict inode, uint8_t *restrict data, uint16_
 
     uint16_t chunk = MIN(1024 - cluster_off, to_read - read);
 
-    kmemcpy(data + read, (uint8_t *)(addr + cluster_off), chunk);
+    memcpy(data + read, (uint8_t *)(addr + cluster_off), chunk);
 
     read += chunk;
     cluster_off = 0;
@@ -266,7 +280,7 @@ uint16_t write_file(struct inode *restrict inode, const uint8_t *restrict data, 
       uint16_t writemax = MIN(1024 - cluster_off, req_siz - write);
 
       size_t addr = (cluster - 2) * 1024 + fsinfo.data_addr + cluster_off;
-      kmemcpy((uint8_t *)addr, data + write, writemax);
+      memcpy((uint8_t *)addr, data + write, writemax);
       write += writemax;
 
       cluster     = next;
@@ -293,7 +307,7 @@ uint16_t write_file(struct inode *restrict inode, const uint8_t *restrict data, 
     uint16_t writemax = MIN(1024 - cluster_off, req_siz - write);
 
     size_t addr = (cluster - 2) * 1024 + fsinfo.data_addr + cluster_off;
-    kmemcpy((uint8_t *)addr, data + write, writemax);
+    memcpy((uint8_t *)addr, data + write, writemax);
     write += writemax;
 
     cluster     = next;
@@ -308,10 +322,9 @@ uint16_t write_file(struct inode *restrict inode, const uint8_t *restrict data, 
 }
 
 void split_path(const char *restrict path, char *restrict pr, char *restrict n) {
-  char pathbuf[32];
-  kstrncpy(pathbuf, path, sizeof(pathbuf));
+  char *pathbuf = strdup(path);
 
-  char *last = kstrrchr(pathbuf, '/');
+  char *last = strrchr(pathbuf, '/');
 
   char *parent;
   char *name;
@@ -325,27 +338,31 @@ void split_path(const char *restrict path, char *restrict pr, char *restrict n) 
     name   = pathbuf;
   }
 
-  kstrcpy(pr, parent);
-  kstrcpy(n, name);
+  strcpy(pr, parent);
+  strcpy(n, name);
+
+  free(pathbuf);
 }
 
 void fat_format_name(const char *restrict name, char out[restrict 11]) {
   char fname[9] = {0};
   char ext[4]   = {0};
 
-  char tmp[16];
-  kstrncpy(tmp, name, sizeof(tmp));
+  char *tmp = strdup(name);
 
-  char *f = kstrtok(tmp, ".");
-  char *e = kstrtok(NULL, ".");
+  char *sv;
+  char *f = strtok_r(tmp, ".", &sv);
+  char *e = strtok_r(NULL, ".", &sv);
 
   if (f)
     snprintkf(fname, sizeof(fname), "%-8s", f);
   if (e)
     snprintkf(ext, sizeof(ext), "%-3s", e);
 
-  kmemcpy(out, fname, 8);
-  kmemcpy(out + 8, ext, 3);
+  memcpy(out, fname, 8);
+  memcpy(out + 8, ext, 3);
+
+  free(tmp);
 }
 
 void *get_addr(uint16_t lc) {
@@ -450,8 +467,8 @@ int fat_create(const char *restrict path, struct inode *restrict inode) {
   char fatname[11];
   fat_format_name(name, fatname);
 
-  kmemcpy(slot->fname, fatname, 8);
-  kmemcpy(slot->ext, fatname + 8, 3);
+  memcpy(slot->fname, fatname, 8);
+  memcpy(slot->ext, fatname + 8, 3);
 
   slot->fatt        = 0;
   slot->size        = 0;
@@ -561,17 +578,17 @@ int fsys_mkdir(const char *path) {
   for (; root_fd[fd].flags & F_USED; fd++)
     ;
 
-  struct inode *in = kmalloc(sizeof(struct inode));
+  struct inode *in = malloc(sizeof(struct inode));
   if (!fat_lookup(path, in)) {
     printkf("err: %s already exists\n", path);
-    kfree(in);
+    free(in);
     return 0;
   }
 
   fat_mkdir(path, in);
 
-  root_fd[fd].inode = in;
-  root_fd[fd].flags = F_USED;
+  root_fd[fd].inode    = in;
+  root_fd[fd].flags    = F_USED;
   root_fd[fd].position = 0;
 
   return fd;
@@ -582,22 +599,24 @@ int fsys_open(const char *fname, uint16_t flags) {
   for (; root_fd[fd].flags & F_USED; fd++)
     ; // find available fd, 0 is reserved for errors
 
-  struct inode *in = kmalloc(sizeof(struct inode));
-  if (fat_lookup(fname, in) && !(flags & O_CREAT)) {
+  struct inode *in = malloc(sizeof(struct inode));
+  if (fat_lookup(fname, in)) {
+    if (flags & O_CREAT) {
+      fat_create(fname, in);
+      goto ok;
+    }
     printkf("err: '%s': no such file\n", fname);
-    kfree(in);
+    free(in);
     return 0;
-  } else if (flags & O_CREAT) {
-    fat_create(fname, in);
   }
-
+ok:
   // going here means the file exists
 
-  root_fd[fd].inode = in;
-  root_fd[fd].flags = F_USED;
+  root_fd[fd].inode    = in;
+  root_fd[fd].flags    = F_USED;
   root_fd[fd].position = 0;
 
-  if(flags & O_JUSTGIVEMETHEADDRESS) {
+  if (flags & O_JUSTGIVEMETHEADDRESS) {
     root_fd[fd].flags |= F_ADDR;
   }
 
@@ -616,8 +635,8 @@ size_t fsys_read(int fd, uint8_t *buf, size_t n) {
   if (in->type == INODE_FILE && !(f->flags & F_ADDR)) {
     read = read_file(in, buf, n, f->position);
     f->position += read;
-  } else if(in->type == INODE_FILE && f->flags & F_ADDR) {
-    kmemcpy(buf + f->position, (uint8_t*)get_addr(in->cluster0) + f->position, n);
+  } else if (in->type == INODE_FILE && f->flags & F_ADDR) {
+    memcpy(buf + f->position, (uint8_t *)get_addr(in->cluster0) + f->position, n);
     f->position += n;
     read = n;
   }
@@ -647,22 +666,25 @@ int fsys_close(int fd) {
     return 1;
   }
 
-  kfree(root_fd[fd].inode);
+  free(root_fd[fd].inode);
   root_fd[fd].flags &= ~F_USED;
 
   return 0;
 }
 
 int fsys_cd(const char *path) {
+  char *pth;
+
   struct inode in = {0};
-  if(fat_lookup(path, &in)) {
+  if (fat_lookup_r(path, &in, &pth)) {
     printkf("%s: doesnt exit\n", path);
     return 0;
-  } else if(in.type == INODE_FILE) {
+  } else if (in.type == INODE_FILE) {
     printkf("not a dir\n");
     return 0;
   }
 
-  kmemcpy(&p_curproc->p_user->u_cdir, &in, sizeof(struct inode));
+  memcpy(&p_curproc->p_user->u_cdir, &in, sizeof(struct inode));
+  strcpy(p_curproc->p_user->u_cdirname, pth);
   return 0;
 }

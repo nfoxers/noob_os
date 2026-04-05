@@ -10,7 +10,7 @@
 
 // y'know what, i surrender living off below 1MB. a cool kernel can't just only use 25KB of memory (b)
 #define EXT_MEM_BASE 0x00100000
-#define EXT_MEM_SIZ ((size_t)1 << 20) // 1MB o' size
+#define EXT_MEM_SIZ  ((size_t)1 << 20) // 1MB o' size
 
 extern uint8_t __bss_start__;
 extern uint8_t __bss_end__;
@@ -29,33 +29,31 @@ struct bios_da {
 
 void parse_bda();
 
-#if defined(__cplusplus)
-  #define RES
-#else
-  #define RES restrict
-#endif
+void    memcpy(void *restrict dst, const void *restrict src, size_t n);
+uint8_t memcmp(const void *s1, const void *s2, size_t n);
+void    memset(void *dst, int c, size_t n);
 
-void    kmemcpy(void *dst, const void *src, size_t siz);
-uint8_t kmemcmp(const void *s1, const void *s2, size_t siz);
-void    kmemset(void *dst, int c, size_t len);
+void    strncpy(char *restrict dst, const char *restrict src, size_t dsize);
+void    strcpy(char *restrict dst, const char *restrict src);
+uint8_t strncmp(const char *s1, const char *s2, size_t n);
+uint8_t strcmp(const char *s1, const char *s2);
+size_t  strlen(const char *s);
+char   *strtok(char *restrict str, const char *restrict delim);
+char   *strtok_r(char *restrict str, const char *restrict delim, char **restrict saveptr);
+char   *strrchr(const char *s, int c);
 
-void    kstrncpy(char *dst, const char *src, size_t siz);
-void    kstrcpy(char *dst, const char *src);
-uint8_t kstrncmp(const char *s1, const char *s2, size_t siz);
-uint8_t kstrcmp(const char *s1, const char *s2);
-size_t  kstrlen(const char *s);
-char   *kstrtok(char *str, const char *delim);
-char   *kstrrchr(const char *s, int c);
-
-void zero_bss();
+char *strdup(const char *s);
+void  zero_bss();
 
 void  kmalloc_init();
-void *kmalloc(size_t size);
-void  kfree(void *ptr);
+void *malloc(size_t size);
+void  free(void *ptr);
 
-void *kmalloc_align(size_t siz, size_t align);
-void kfree_align(void *ptr);
+void  *malloc_align(size_t siz, size_t align);
+void   free_align(void *ptr);
+size_t getused();
 
+// smbios.c
 void smbios_scan(void);
 
 #endif

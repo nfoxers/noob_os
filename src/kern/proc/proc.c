@@ -1,9 +1,10 @@
 #include "proc/proc.h"
 #include "cpu/gdt.h"
 #include "cpu/idt.h"
+#include "fs/vfs.h"
 #include "mem/mem.h"
 #include "video/printf.h"
-#include "cpu/syscall.h"
+#include "syscall/syscall.h"
 
 #define NOPROC 10
 
@@ -109,7 +110,8 @@ void exit_cur() {
 
 extern void childret();
 
-struct proc *alloc_proc(void (*f)(), uint16_t cs) {
+struct proc *alloc_proc(void (*f)(), uint16_t cs, void *args) {
+  // todo: args!
   for (int i = 0; i < NOPROC; i++) {
     if (procs[i].p_stat == P_SFREE) {
       procs[i].p_stat = P_SRUNABLE;
@@ -118,6 +120,7 @@ struct proc *alloc_proc(void (*f)(), uint16_t cs) {
       procs[i].p_pid  = i;
       procs[i].p_ppid = 0;
       procs[i].p_user = &root;
+      procs[i].p_args = args;
 
       uint32_t esp = 0x6210;
       procs[i].p_stidx = alloc_esp(&esp);
@@ -185,25 +188,21 @@ void schedule() {
   task_switch(next);
 }
 
-void sys_yield() {
-  CLI;
-  schedule();
-  STI;
-}
+
 
 void general_switch() {
   syscall(SYS_YIELD);
 }
 
-void spawn_proc(void (*f)(), uint16_t cs) {
+void spawn_proc(void (*f)(), uint16_t cs, void *args) {
   CLI; // be advised this only works on kernel mode
-  struct proc *p = alloc_proc(f, cs);
+  struct proc *p = alloc_proc(f, cs, args);
   rq_add(p);
   STI;
 }
 
 void init_root_proc() {
-  struct proc *kproc = alloc_proc((void (*)())0x9400, CS_K);
+  struct proc *kproc = alloc_proc((void (*)())0x9400, CS_K, NULL);
   rq_add(kproc);
   p_curproc = kproc;
 
@@ -213,6 +212,8 @@ void init_root_proc() {
 
   root.u_uid  = 0;
   root.u_gid  = 0;
+  root.u_cdirname = malloc(CWD_MAXSIZ);
+  strcpy(root.u_cdirname, "/");
   // cdir will handled by fs
 
   //register_ex(sys_yield, SYS_INTNO);

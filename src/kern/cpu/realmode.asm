@@ -4,6 +4,11 @@ global enditall
 
 enditall:
   cli
+
+  mov eax, cr0
+  and eax, 0x7fffffff
+  mov cr0, eax
+
   lgdt [gdtr]
   jmp 0x08:pm16
 

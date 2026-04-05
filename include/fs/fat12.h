@@ -30,6 +30,31 @@ struct bootsect {
   uint16_t bootsig;
 } __attribute__((packed));
 
+#define FAT_RDONLY 0x01
+#define FAT_HIDDEN 0x02
+#define FAT_SYSTEM 0x04
+#define FAT_VOLLAB 0x08
+#define FAT_SUBDIR 0x10
+#define FAT_ARCHIV 0x20
+#define FAT_DEVICE 0x40
+#define FAT_RESERV 0x80
+
+struct direntry {
+  char     fname[8];
+  char     ext[3];
+  uint8_t  fatt;
+  uint8_t  reserved;
+  uint8_t  create_cs;
+  uint16_t create_time;
+  uint16_t create_date;
+  uint16_t la_date;
+  uint16_t high_cluster;
+  uint16_t lm_time;
+  uint16_t lm_date;
+  uint16_t low_cluster;
+  uint32_t size;
+} __attribute__((packed));
+
 void init_fs();
 
 void list_dir(const char *path);

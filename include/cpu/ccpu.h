@@ -17,5 +17,6 @@ void rdmsr(uint32_t msr, uint32_t *lo, uint32_t *hi);
 void wrmsr(uint32_t msr, uint32_t lo, uint32_t hi);
 
 void set_apic();
+void fpu_init();
 
 #endif

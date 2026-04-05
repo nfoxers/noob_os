@@ -84,7 +84,7 @@ void rtl8139_init(struct pci_hdr *hdr, uint32_t bus, uint32_t dev) {
   outb(devaddr + 0x37, 0x10);
   while ((inb(devaddr + 0x37) & 0x10) != 0)
     ;
-  rxbf = kmalloc(8192 + 16 + 1500);
+  rxbf = malloc(8192 + 16 + 1500);
   outl(devaddr + 0x30, (uint32_t)rxbf);
   outw(devaddr + 0x3C, 0x0005);
   outl(devaddr + 0x44, 0xf | (1 << 7));

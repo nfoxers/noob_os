@@ -1,6 +1,7 @@
-#include "cpu/syscall.h"
+#include "syscall/syscall.h"
 #include "cpu/idt.h"
-#include "driver/fat12.h"
+#include "fs/fat12.h"
+#include "proc/proc.h"
 #include "video/printf.h"
 #include <stdarg.h>
 #include <stdint.h>
@@ -59,10 +60,18 @@ uint32_t sys_unlink(ARGS) {
   return fsys_unlink((char*)a1);
 }
 
+uint32_t sys_yield(ARGS) {
+  ARGS_USELESS;
+  CLI;
+  schedule();
+  STI;
+  return 0;
+}
+
 /* jump table & handlers */
 
-syshand systab[NSYS] = {
-    0, 0, 0, sys_read, 0, sys_open, sys_close, 0, 0, sys_chdir, sys_mkdir,
+const syshand systab[NSYS] = {
+    0, 0, 0, sys_read, 0, sys_open, sys_close, 0, sys_yield, sys_chdir, sys_mkdir,
   sys_unlink};
 
 void sys_hand(struct regs *r) {
@@ -76,15 +85,8 @@ void sys_hand(struct regs *r) {
   }
 }
 
-void register_sys(syshand f, uint32_t no) {
-  if (no >= NSYS)
-    return;
-  systab[no] = f;
-}
-
 void syscall_init() {
   print_init("sys", "initializing syscalls", 0);
-
 
   register_ex(sys_hand, SYS_INTNO);
 }
