@@ -1,5 +1,6 @@
 #include "syscall/syscall.h"
 #include "stddef.h"
+#include "fs/vfs.h"
 
 long restart_syscall(void) { // unimplemented
   return syscall(SYS_RSYS);
@@ -50,3 +51,11 @@ int mkdir(const char *pathname, mode_t mode){ // 39
 int unlink(const char *path) { // 10
   return syscall(SYS_UNLINK, path);
 }
+
+DIR *opendir(const char *path) {
+  return (DIR *)syscall(SYS_OPENDIR, path);
+}
+
+int closedir(struct inode *in, DIR *d) {
+  return syscall(SYS_CLOSEDIR, in, d);
+} 

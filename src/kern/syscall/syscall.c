@@ -1,10 +1,12 @@
 #include "syscall/syscall.h"
 #include "cpu/idt.h"
 #include "fs/fat12.h"
+#include "fs/vfs.h"
 #include "proc/proc.h"
 #include "video/printf.h"
 #include <stdarg.h>
 #include <stdint.h>
+#include <lib/errno.h>
 
 /* one little note so i dont forget
   eax: sys nr
@@ -23,8 +25,6 @@
 
 uint32_t sys_rval;
 typedef uint32_t (*syshand)(uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5, uint32_t a6);
-
-uint32_t errno;
 
 /* core functions */
 
@@ -68,11 +68,21 @@ uint32_t sys_yield(ARGS) {
   return 0;
 }
 
+uint32_t sys_opendir(ARGS) {
+  ARGS_USELESS;
+  return (uint32_t)fsys_opendir((char*)a1);
+}
+
+uint32_t sys_closedir(ARGS) {
+  ARGS_USELESS;
+  return fsys_closedir((struct inode *)a1, (DIR *)a2);
+}
+
 /* jump table & handlers */
 
 const syshand systab[NSYS] = {
     0, 0, 0, sys_read, 0, sys_open, sys_close, 0, sys_yield, sys_chdir, sys_mkdir,
-  sys_unlink};
+  sys_unlink, sys_opendir, sys_closedir};
 
 void sys_hand(struct regs *r) {
   syshand e = systab[r->eax];

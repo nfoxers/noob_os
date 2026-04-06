@@ -1,40 +1,13 @@
 #include "fs/vfs.h"
 #include "mem/mem.h"
 #include "proc/proc.h"
+#include "syscall/syscall.h"
 #include "video/printf.h"
+#include <lib/errno.h>
 #include <stddef.h>
 #include <stdint.h>
 
 extern struct inode rootinode;
-
-uint32_t read_fs(struct inode *in, uint32_t off, size_t siz, uint8_t *b) {
-  if (in->fops.read)
-    return in->fops.read(in, b, off, siz);
-  return 0;
-}
-
-uint32_t write_fs(struct inode *in, uint32_t off, size_t siz, uint8_t *b) {
-  if (in->fops.write)
-    return in->fops.write(in, b, off, siz);
-  return 0;
-}
-
-void open_fs(struct inode *in, uint16_t mode) {
-  if (in->fops.open)
-    in->fops.open(in, mode);
-}
-
-void close_fs(struct inode *in) {
-  if (in->fops.close)
-    in->fops.close(in);
-}
-
-struct inode *lookup_fs(struct inode *in, const char *name) {
-  if ((in->type == INODE_DIR) && in->ops.lookup) {
-    return in->ops.lookup(in, name);
-  }
-  return NULL;
-}
 
 #define MAX_PLEN 127
 
@@ -47,18 +20,18 @@ char *path_canon(const char *cwd, const char *path) {
   char  *buf = malloc(n);
 
   if (*path == '/') {
-    strncpy(tmp, path, MAX_PLEN - 1);
+    strncpy(tmp, path, n - 1);
   } else {
-    snprintkf(tmp, MAX_PLEN, "%s/%s", cwd, path);
+    snprintkf(tmp, n, "%s/%s", cwd, path);
   }
-  tmp[MAX_PLEN - 1] = 0;
+  tmp[n - 1] = 0;
 
   char *segs[MAX_PLEN / 2];
   int   top = 0;
 
   char *tok;
   char *rest = tmp;
-  
+
   while ((tok = strtok_r(rest, "/", &rest))) {
     if (!strcmp(tok, "."))
       continue;
@@ -75,7 +48,7 @@ char *path_canon(const char *cwd, const char *path) {
   for (int i = 0; i < top; i++) {
     size_t seglen = strlen(segs[i]);
 
-    if (len + seglen + 1 > n){
+    if (len + seglen + 1 > n) {
       free(tmp);
       return NULL;
     }
@@ -99,38 +72,93 @@ char *path_canon(const char *cwd, const char *path) {
   return buf;
 }
 
+/* vfs internals */
+
+uint32_t read_fs(struct inode *in, uint32_t off, size_t siz, uint8_t *b) {
+  if (in->fops.read)
+    return in->fops.read(in, b, off, siz);
+  return 0;
+}
+
+uint32_t write_fs(struct inode *in, uint32_t off, size_t siz, uint8_t *b) {
+  if (in->fops.write)
+    return in->fops.write(in, b, off, siz);
+  return 0;
+}
+
+void open_fs(struct inode *in, uint16_t mode) {
+  if (in->fops.open)
+    in->fops.open(in, mode);
+}
+
+void close_fs(struct inode *in) {
+  if (in->fops.close)
+    in->fops.close(in);
+}
+
+DIR *opendir_fs(struct inode *in) {
+  if (in && in->ops.opendir) {
+    printkf("jumpen an open %x\n", in->ops.opendir);
+    return in->ops.opendir(in);
+  }
+  return NULL;
+}
+
+int closedir_fs(struct inode *in, DIR *d) {
+  if (in && in->ops.closedir) {
+    return in->ops.closedir(in, d);
+  }
+  return -ENOSYS;
+}
+
+struct inode *lookup_fs(struct inode *in, const char *name) {
+  if ((in->type == INODE_DIR) && in->ops.lookup) {
+    printkf("jumpen an lok %x\n", in->ops.lookup);
+    return in->ops.lookup(in, name);
+  }
+  return NULL;
+}
+
 struct inode *lookup_vfs_r(const char *path, char **save) {
   char *cwd = p_curproc->p_user->u_cdirname;
-  printkf("cwd: %s pth: %s\n", cwd, path);
+
 
   char *pth = path_canon(cwd, path);
-  *save = pth;
+  *save     = strdup(pth);
+
+  //printkf("cwd: %s pth: %s ok: %s \n", cwd, path, *save);
 
   int mdepth = 0;
-  int depth = 0; // skip the initial /
-  for(size_t i = 0; i < strlen(pth); i++) {
-    if(pth[i] == '/') mdepth++;
+  int depth  = 0; // skip the initial /
+  for (size_t i = 0; i < strlen(pth); i++) {
+    if (pth[i] == '/')
+      mdepth++;
   }
 
   struct inode *inode = &rootinode;
-  char *sv;
+  char         *sv;
 
   char *tok = strtok_r(pth, "/", &sv);
-  
-  printkf("k: %s\n", pth);
+
+  if(!tok) { // effective path = / (root)
+    struct inode *in = malloc(sizeof(struct inode));
+    memcpy(in, inode, sizeof(struct inode));
+    free(pth);
+    return in;
+  }
 
   while (tok) {
     inode = lookup_fs(inode, tok);
-    printkf("name: %s\n", tok);
 
     if (!inode) {
+      printkf("lookup_vfs: file not found\n");
       free(pth);
       return NULL;
     }
 
     depth++;
-    
-    if(depth == mdepth) {
+
+    if (depth == mdepth) {
       free(pth);
       return inode;
     }
@@ -144,38 +172,81 @@ struct inode *lookup_vfs_r(const char *path, char **save) {
 }
 
 struct inode *lookup_vfs(const char *path) {
-  char *sav;
+  char         *sav;
   struct inode *ret = lookup_vfs_r(path, &sav);
+  free(sav);
   return ret;
 }
 
-DIR *opendir_fs(struct inode *in) {
-  if(in && in->ops.opendir) {
-    return in->ops.opendir(in);
-  }
-  return NULL;
-}
+/* system call abstractions */
 
-DIR *opendir_ffs(const char *path) {
-  if(!path) return NULL;
+DIR *fsys_opendir(const char *path) {
+  if (!path)
+    return NULL;
+
   struct inode *in = lookup_vfs(path);
-  
+
   return opendir_fs(in);
 };
+
+int fsys_closedir(struct inode *in, DIR *d) {
+  printkf("closedir on in %x\n", d->in);
+  return closedir_fs(in, d);
+}
 
 int fsys_cd(const char *path) {
   char *pth;
 
   struct inode *inp = lookup_vfs_r(path, &pth);
-  if(!inp) {
-    printkf("%s: no such file\n");
-    return -1;
+  if (!inp) {
+    printkf("%s: no such file\n", pth);
+    return -ENOENT;
+  }
+
+  if (inp->type != INODE_DIR) {
+    printkf("%s: not a directory\n", pth);
+
+    free(inp);
+    free(pth);
+    return -ENOTDIR;
   }
 
   memcpy(&p_curproc->p_user->u_cdir, inp, sizeof(struct inode));
   strcpy(p_curproc->p_user->u_cdirname, pth);
 
   free(inp);
+  free(pth);
   return 0;
 }
 
+/* convenience functions */
+
+int lsdir(const char *path) {
+  // printkf("cwd: %s\n", p_curproc->p_user->u_cdirname);
+
+  DIR *d = opendir(path);
+  if (!d) {
+    perror("ls: opendir");
+    return 1;
+  }
+
+  for (int i = 0; i < d->count; i++) {
+    printkf("%-13.13s", d[i].data);
+    if (d[i].type & INODE_DIR)
+      printkf(" <DIR> ");
+    else
+      printkf("       ");
+    printkf("%d\n", d[i].size);
+  }
+
+  printkf("pat: %s\n", path);
+
+  struct inode *in = lookup_vfs(path);
+
+  if (closedir(in, d)) {
+    perror("ls: closedir");
+    free(in);
+  }
+  free(in);
+  return 0;
+}

@@ -46,8 +46,10 @@ typedef uint32_t off_t;
 
 typedef struct dirstream {
   uint8_t count;
-  size_t  size;
   uint8_t type;
+  size_t size;
+
+  struct inode *in;
 
   char data[DIRENT_MAXSIZ];
 } DIR;
@@ -66,7 +68,7 @@ struct inode_ops {
   int (*unlink)(struct inode *dir, const char *name);
 
   DIR *(*opendir)(struct inode *dir);
-  int (*closedir)(DIR *dir);
+  int (*closedir)(struct inode *dir, DIR *d);
 };
 
 struct file_ops {
@@ -100,6 +102,10 @@ char *path_canon(const char *cwd, const char *path);
 
 struct inode *lookup_vfs(const char *path);
 
-DIR *opendir_ffs(const char *path);
+/* syscalls */
+DIR *fsys_opendir(const char *path);
+int fsys_closedir(struct inode *in, DIR *d);
+
+void init_rootfs();
 
 #endif

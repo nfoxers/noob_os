@@ -5,6 +5,8 @@
 #include "proc/proc.h"
 #include "video/printf.h"
 #include "video/video.h"
+#include <lib/errno.h>
+#include <lib/ctype.h>
 #include <stdint.h>
 
 #define BS ((struct bootsect *)0x7c00)
@@ -94,6 +96,13 @@ void write_fat(uint16_t cluster, uint16_t next) {
   *(uint16_t *)&fat[ent_offset + 1024] = tmp;
 }
 
+void tolowers(char *c) {
+  while(*c) {
+    *c = tolower(*c);
+    c++;
+  }
+}
+
 int fat_name_match(struct direntry *restrict e, const char *restrict name) {
   char fatname[13];
   char fname[9];
@@ -113,7 +122,13 @@ int fat_name_match(struct direntry *restrict e, const char *restrict name) {
   else
     snprintkf(fatname, sizeof(fatname), "%s", fname);
 
-  return !strcmp(fatname, name);
+  char *tmp = strdup(name);
+  tolowers(tmp);
+  tolowers(fatname);
+
+  int ret = !strcmp(fatname, tmp);
+  free(tmp);
+  return ret;
 }
 
 void set_perms(struct inode *in, uint8_t fatt) {
@@ -122,13 +137,14 @@ void set_perms(struct inode *in, uint8_t fatt) {
     in->permission &= ~(PRM_W * (PRM_USR | PRM_GRP | PRM_OTH));
 }
 
-int fat_lookup(const char *restrict path, struct inode *restrict inode);
+int fat_lookup_from(const char *restrict path, const struct inode *restrict from, struct inode *restrict buf);
 
 struct inode *finddir_fat(struct inode *in, const char *path) {
   struct inode *inode = malloc(sizeof(struct inode));
-  memcpy(inode, in, sizeof(struct inode));
-  if (fat_lookup(path, inode)) {
+
+  if (fat_lookup_from(path, in, inode)) {
     free(inode);
+    errno = ENOENT;
     return NULL;
   }
 
@@ -145,9 +161,9 @@ DIR *opendir_fat(struct inode *in) {
 
   DIR *d = malloc(sizeof(DIR) * DT_MAXDIR);
 
-  printkf("root: %x\n", fsinfo.root_addr);
-
   struct direntry *dr = in->entaddr == root_dir.entaddr ? root_dir.entaddr : (struct direntry *)get_addr(in->entaddr->low_cluster);
+
+  //printkf("entaddr: %x\n", dr);
 
   int i;
   for (i = 0; i < DT_MAXDIR; i++, dr++) {
@@ -162,13 +178,23 @@ DIR *opendir_fat(struct inode *in) {
   }
 
   d[0].count = i;
+  d[0].in = malloc(sizeof(struct inode));
+  memcpy(&d[0].in, in, sizeof(struct inode));
 
   return d;
+}
+
+int closedir_fat(struct inode *dir, DIR *d) {
+  (void)dir;
+  free(d->in);
+  free(d);
+  return 0;
 }
 
 void set_vfs(struct inode *in) {
   in->ops.lookup  = finddir_fat;
   in->ops.opendir = opendir_fat;
+  in->ops.closedir = closedir_fat;
 }
 
 int fat_lookup_r(const char *restrict path, struct inode *restrict inode, char **restrict saveptr) {
@@ -238,6 +264,90 @@ int fat_lookup_r(const char *restrict path, struct inode *restrict inode, char *
   }
 
   free(pathbuf);
+  return 0;
+}
+
+int fat_lookup_from(const char *restrict path, const struct inode *restrict from, struct inode *restrict buf) {
+  char *pth = strdup(path);
+
+  char *sv;
+  char *tok = strtok_r(pth, "/", &sv);
+
+  struct direntry *dr;
+  int              entries = 32;
+  int              found   = 0;
+  int              cluster = 0;
+
+  while (tok) {
+    found = 0;
+    if (cluster == 0) {
+      dr      = get_addr(from->entaddr->low_cluster);
+      entries = 32;
+    } else {
+      dr      = (struct direntry *)((cluster - 2) * 1024 + fsinfo.data_addr);
+      entries = 1024 / sizeof(struct direntry);
+    }
+
+    for (int i = 0; i < entries; i++) {
+      if (dr[i].fname[0] == 0x00)
+        break;
+      if ((uint8_t)dr[i].fname[0] == 0xE5)
+        continue;
+      if (fat_name_match(&dr[i], tok)) {
+        found++;
+        if (dr[i].fatt & FAT_SUBDIR) {
+          cluster   = dr[i].low_cluster;
+          buf->type = INODE_DIR;
+        } else {
+          buf->type = INODE_FILE;
+        }
+
+        buf->cluster0 = dr[i].low_cluster;
+        buf->entaddr  = &dr[i];
+        buf->size     = dr[i].size;
+
+        set_perms(buf, dr[i].fatt);
+        set_vfs(buf);
+
+        break;
+      }
+    }
+
+    tok = strtok_r(NULL, "/", &sv);
+  }
+
+  if (!found) {
+    free(pth);
+    return 1;
+  }
+
+  free(pth);
+  return 0;
+}
+
+int find_home(struct inode *buf) {
+  struct direntry *dr = fsinfo.root_addr;
+
+  int found = 0;
+  for (int i = 0; i < 32; i++) {
+    if (dr[i].fname[0] == 0x00)
+      break;
+    if ((uint8_t)dr[i].fname[0] == 0xE5)
+      continue;
+    if (fat_name_match(&dr[i], "home")) {
+      found++;
+
+      buf->entaddr = &dr[i];
+      buf->cluster0 = dr[i].low_cluster;
+      buf->type = INODE_DIR;
+
+      set_vfs(buf);
+
+      break;
+    }
+  }
+
+  if(!found) return 1;
   return 0;
 }
 
@@ -430,23 +540,6 @@ void list_dir(const char *path) {
       printk("       ");
     printkf("%d\n", de->size);
   }
-}
-
-int lsdir(const char *path) {
-  printkf("cwd: %s\n", p_curproc->p_user->u_cdirname);
-  DIR *d = opendir_ffs(path);
-  if(!d) return 1;
-
-  for(int i = 0; i < d->count; i++) {
-        printkf("%s", d[i].data);
-    if (d[i].type & INODE_DIR)
-      printk(" <DIR> ");
-    else
-      printk("       ");
-    printkf("%d\n", d[i].size);
-  }
-
-  return 0;
 }
 
 void fat_find_free(struct inode *restrict in, struct direntry **restrict d) {
@@ -700,7 +793,6 @@ size_t fsys_write(int fd, const uint8_t *buf, size_t n) {
   if (in->type == INODE_FILE) {
     printkf("fp: %d\n", f->position);
     write = write_file(in, buf, n, f->position);
-    printkf("w: %d\n", write);
     f->position += write;
   }
   return write;
@@ -716,4 +808,3 @@ int fsys_close(int fd) {
 
   return 0;
 }
-

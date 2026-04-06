@@ -12,6 +12,7 @@
 #include "syscall/syscall.h"
 #include "video/printf.h"
 #include "video/video.h"
+#include <lib/errno.h>
 
 #define ARGS_USELESS \
   (void)argv;        \
@@ -123,7 +124,7 @@ int c_rm(char **argv, int argc) {
     return 2;
   }
 
-  unlink(argv[1]);
+  if(unlink(argv[1])) perror("rm");
   return 0;
 }
 
@@ -134,6 +135,10 @@ int c_touch(char **argv, int argc) {
   }
 
   int fd = open(argv[1], O_CREAT);
+  if(fd == -1) {
+    perror("touch");
+    return 1;
+  }
   close(fd);
   return 0;
 }
@@ -172,8 +177,10 @@ int c_mkdir(char **argv, int argc) {
 
   // sys_mkdir(argv[1]);
   int fd = mkdir(argv[1], 0);
-  if (!fd)
+  if (fd == -1) {
+    perror("mkdir");
     return 1;
+}
   close(fd);
   return 0;
 }
@@ -181,7 +188,10 @@ int c_mkdir(char **argv, int argc) {
 int c_cd(char **argv, int argc) {
   if (argc == 1)
     return 0;
-  chdir(argv[1]);
+  if(chdir(argv[1])) {
+    perror("cd");
+    return 1;
+  }
   return 0;
 }
 

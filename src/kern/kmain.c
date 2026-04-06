@@ -14,6 +14,7 @@
 #include "video/video.h"
 #include "proc/shell.h"
 #include <stdarg.h>
+#include <lib/errno.h>
 #include "driver/serial.h"
 #include "syscall/syscall.h"
 
@@ -50,6 +51,8 @@ void kmain(void) {
   print_time();
   
   page_init();
+
+  init_rootfs();
 
   STI;  
   shell();

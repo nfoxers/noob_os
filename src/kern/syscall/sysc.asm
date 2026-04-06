@@ -25,12 +25,11 @@ syscall:
   pop esi
   pop ebx
 
-  cmp eax, -4095
-  jae .err
+  test eax, eax
+  js .err
   ret
 .err:
-  not eax
-  add eax, 1
+  neg eax
   mov [errno], eax ; errno = -ret
 
   mov eax, -1

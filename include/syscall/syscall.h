@@ -4,6 +4,8 @@
 #include "stddef.h"
 #include "stdint.h"
 
+#include "fs/vfs.h"
+
 #define SYS_RSYS    0
 #define SYS_EXIT    1
 #define SYS_FORK    2
@@ -13,10 +15,12 @@
 #define SYS_CLOSE   6
 #define SYS_WAITPID 7
 
-#define SYS_YIELD  8 // no
-#define SYS_CHDIR  9
-#define SYS_MKDIR  10
-#define SYS_UNLINK 11
+#define SYS_YIELD    8 // no
+#define SYS_CHDIR    9
+#define SYS_MKDIR    10
+#define SYS_UNLINK   11
+#define SYS_OPENDIR  12
+#define SYS_CLOSEDIR 13
 
 typedef int      pid_t;
 typedef int      ssize_t;
@@ -44,5 +48,10 @@ int sched_yield();
 int chdir(const char *path);
 int mkdir(const char *pathname, mode_t mode);
 int unlink(const char *path);
+
+// doesnt even exist in linux syscall table
+
+DIR *opendir(const char *path);
+int  closedir(struct inode *in, DIR *d);
 
 #endif
