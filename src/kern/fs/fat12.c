@@ -5,8 +5,8 @@
 #include "proc/proc.h"
 #include "video/printf.h"
 #include "video/video.h"
-#include <lib/errno.h>
 #include <lib/ctype.h>
+#include <lib/errno.h>
 #include <stdint.h>
 
 #define BS ((struct bootsect *)0x7c00)
@@ -65,39 +65,8 @@ void init_fs() {
   memcpy(&p_curproc->p_user->u_cdir, &root_dir, sizeof(struct inode));
 }
 
-uint16_t fat_value(uint16_t cluster) {
-  uint8_t *fat        = (uint8_t *)(fsinfo.fat_start * 512 + 0x7c00);
-  uint16_t fat_offset = cluster + (cluster / 2);
-  uint16_t ent_offset = fat_offset % 1024;
-
-  uint16_t val = *(uint16_t *)&fat[ent_offset];
-
-  val = (cluster & 1) ? val >> 4 : val & 0xfff;
-
-  return val;
-}
-
-void write_fat(uint16_t cluster, uint16_t next) {
-  uint8_t *fat        = (uint8_t *)(fsinfo.fat_start * 512 + 0x7c00);
-  uint16_t fat_offset = cluster + (cluster / 2);
-  uint16_t ent_offset = fat_offset % 1024;
-
-  next &= 0x0FFF;
-
-  uint16_t tmp = *(uint16_t *)&fat[ent_offset];
-
-  if (cluster & 1) {
-    tmp = (tmp & 0x000F) | (next << 4);
-  } else {
-    tmp = (tmp & 0xF000) | next;
-  }
-
-  *(uint16_t *)&fat[ent_offset]        = tmp;
-  *(uint16_t *)&fat[ent_offset + 1024] = tmp;
-}
-
 void tolowers(char *c) {
-  while(*c) {
+  while (*c) {
     *c = tolower(*c);
     c++;
   }
@@ -132,7 +101,7 @@ int fat_name_match(struct direntry *restrict e, const char *restrict name) {
 }
 
 void set_perms(struct inode *in, uint8_t fatt) {
-  in->permission = 0766; // x only for the user
+  in->permission = 0666;
   if (fatt & FAT_RDONLY)
     in->permission &= ~(PRM_W * (PRM_USR | PRM_GRP | PRM_OTH));
 }
@@ -151,8 +120,27 @@ struct inode *finddir_fat(struct inode *in, const char *path) {
   return inode;
 }
 
-void *get_addr(uint16_t lc) {
+inline void *get_addr(uint16_t lc) {
   return (void *)(fsinfo.data_addr + (lc - 2) * 1024);
+}
+
+void fat2normal(const char *fname, const char *ext, char *buf) {
+  if (!fname || !ext || !buf)
+    return;
+  int count = 0;
+  while (count++ < 8 && (*fname && *fname != ' ')) {
+    *buf++ = *fname++;
+  }
+  if (*ext == ' ') {
+    *buf &= 0;
+    return;
+  }
+  *buf++ = '.';
+  count  = 0;
+  while (count++ < 3 && (*ext && *ext != ' ')) {
+    *buf++ = *ext++;
+  }
+  *buf = 0;
 }
 
 DIR *opendir_fat(struct inode *in) {
@@ -163,7 +151,7 @@ DIR *opendir_fat(struct inode *in) {
 
   struct direntry *dr = in->entaddr == root_dir.entaddr ? root_dir.entaddr : (struct direntry *)get_addr(in->entaddr->low_cluster);
 
-  //printkf("entaddr: %x\n", dr);
+  // printkf("entaddr: %x\n", dr);
 
   int i;
   for (i = 0; i < DT_MAXDIR; i++, dr++) {
@@ -173,98 +161,50 @@ DIR *opendir_fat(struct inode *in) {
       continue;
 
     d[i].size = dr->size;
-    snprintkf(d[i].data, DIRENT_MAXSIZ, "% 8.8s % 3.3s", dr->fname, dr->ext);
+    // snprintkf(d[i].data, DIRENT_MAXSIZ, "% 8.8s % 3.3s", dr->fname, dr->ext);
     d[i].type = dr->fatt & FAT_SUBDIR ? INODE_DIR : INODE_FILE;
+
+    char buf[20];
+    fat2normal(dr->fname, dr->ext, buf);
+    strncpy(d[i].data, buf, sizeof buf);
+
+    d[i].in         = malloc(sizeof(struct inode));
+    struct inode *k = finddir_fat(in, buf);
+    
+    if (!k) {
+      free(d[i].in);
+      d[i].in = NULL;
+      printkf("unable to find %s\n", buf);
+      continue;
+    }
+
+    memcpy(d[i].in, k, sizeof(struct inode));
+    free(k);
   }
 
   d[0].count = i;
+  /*
   d[0].in = malloc(sizeof(struct inode));
-  memcpy(&d[0].in, in, sizeof(struct inode));
-
+  memcpy(d[0].in, in, sizeof(struct inode));
+  */
   return d;
 }
 
 int closedir_fat(struct inode *dir, DIR *d) {
   (void)dir;
-  free(d->in);
+
+  for (int i = 0; i < d->count; i++) {
+    d[i].in ? free(d[i].in) : (void)0;
+  }
+
   free(d);
   return 0;
 }
 
 void set_vfs(struct inode *in) {
-  in->ops.lookup  = finddir_fat;
-  in->ops.opendir = opendir_fat;
+  in->ops.lookup   = finddir_fat;
+  in->ops.opendir  = opendir_fat;
   in->ops.closedir = closedir_fat;
-}
-
-int fat_lookup_r(const char *restrict path, struct inode *restrict inode, char **restrict saveptr) {
-  // todo: long filanames
-  *saveptr      = path_canon("/", path);
-  char *pathbuf = strdup(*saveptr);
-
-  if (pathbuf[0] == '/' && pathbuf[1] == 0) {
-    inode->cluster0   = 0;
-    inode->entaddr    = root_dir.entaddr;
-    inode->size       = 0;
-    inode->type       = INODE_DIR;
-    inode->permission = root_dir.permission;
-    return 0;
-  }
-
-  char *sv;
-  char *component = strtok_r(pathbuf, "/", &sv);
-
-  struct direntry *dir;
-
-  uint16_t cluster = 0; // root
-  int      entries = BS->roots;
-  int      found   = 0;
-
-  while (component) {
-    found = 0;
-    if (cluster == 0) {
-      dir     = (struct direntry *)fsinfo.root_addr;
-      entries = BS->roots;
-    } else {
-      dir     = (struct direntry *)((cluster - 2) * 1024 + fsinfo.data_addr);
-      entries = 1024 / sizeof(struct direntry);
-    }
-
-    for (int i = 0; i < entries; i++) {
-      if (dir[i].fname[0] == 0x00)
-        break;
-      if ((uint8_t)dir[i].fname[0] == 0xE5)
-        continue;
-      if (fat_name_match(&dir[i], component)) {
-        found = 1;
-        if (dir[i].fatt & FAT_SUBDIR) {
-          cluster     = dir[i].low_cluster;
-          inode->type = INODE_DIR;
-        } else {
-          inode->type = INODE_FILE;
-        }
-
-        inode->cluster0 = dir[i].low_cluster;
-        inode->entaddr  = &dir[i];
-        inode->size     = dir[i].size;
-
-        set_perms(inode, dir[i].fatt);
-        set_vfs(inode);
-
-        break;
-      }
-    }
-
-    if (!found) {
-      free(pathbuf);
-      return 1;
-    }
-
-    component = strtok_r(NULL, "/", &sv);
-  }
-
-  free(pathbuf);
-  return 0;
 }
 
 int fat_lookup_from(const char *restrict path, const struct inode *restrict from, struct inode *restrict buf) {
@@ -278,16 +218,26 @@ int fat_lookup_from(const char *restrict path, const struct inode *restrict from
   int              found   = 0;
   int              cluster = 0;
 
+  if (!from) {
+    cluster = 0x7fffff00;
+    dr      = fsinfo.root_addr;
+  }
+
   while (tok) {
     found = 0;
+
     if (cluster == 0) {
-      dr      = get_addr(from->entaddr->low_cluster);
+      dr = get_addr(from->entaddr->low_cluster);
+      entries = 32;
+    } else if (cluster == 0x7fffff00) {
+      // dr      = get_addr(from->entaddr->low_cluster);
       entries = 32;
     } else {
       dr      = (struct direntry *)((cluster - 2) * 1024 + fsinfo.data_addr);
       entries = 1024 / sizeof(struct direntry);
     }
 
+    // printkf("der: %p\n", dr - 0x7c00);
     for (int i = 0; i < entries; i++) {
       if (dr[i].fname[0] == 0x00)
         break;
@@ -313,12 +263,12 @@ int fat_lookup_from(const char *restrict path, const struct inode *restrict from
       }
     }
 
-    tok = strtok_r(NULL, "/", &sv);
-  }
+    if (!found) {
+      free(pth);
+      return 1;
+    }
 
-  if (!found) {
-    free(pth);
-    return 1;
+    tok = strtok_r(NULL, "/", &sv);
   }
 
   free(pth);
@@ -337,9 +287,9 @@ int find_home(struct inode *buf) {
     if (fat_name_match(&dr[i], "home")) {
       found++;
 
-      buf->entaddr = &dr[i];
+      buf->entaddr  = &dr[i];
       buf->cluster0 = dr[i].low_cluster;
-      buf->type = INODE_DIR;
+      buf->type     = INODE_DIR;
 
       set_vfs(buf);
 
@@ -347,15 +297,42 @@ int find_home(struct inode *buf) {
     }
   }
 
-  if(!found) return 1;
+  if (!found)
+    return 1;
   return 0;
 }
 
-int fat_lookup(const char *restrict path, struct inode *restrict inode) {
-  char *ptr;
-  int   ret = fat_lookup_r(path, inode, &ptr); // ptr is malloc'd inside
-  free(ptr);
-  return ret;
+/* inner filesystem */
+
+uint16_t fat_value(uint16_t cluster) {
+  uint8_t *fat        = (uint8_t *)(fsinfo.fat_start * 512 + 0x7c00);
+  uint16_t fat_offset = cluster + (cluster / 2);
+  uint16_t ent_offset = fat_offset % 1024;
+
+  uint16_t val = *(uint16_t *)&fat[ent_offset];
+
+  val = (cluster & 1) ? val >> 4 : val & 0xfff;
+
+  return val;
+}
+
+void write_fat(uint16_t cluster, uint16_t next) {
+  uint8_t *fat        = (uint8_t *)(fsinfo.fat_start * 512 + 0x7c00);
+  uint16_t fat_offset = cluster + (cluster / 2);
+  uint16_t ent_offset = fat_offset % 1024;
+
+  next &= 0x0FFF;
+
+  uint16_t tmp = *(uint16_t *)&fat[ent_offset];
+
+  if (cluster & 1) {
+    tmp = (tmp & 0x000F) | (next << 4);
+  } else {
+    tmp = (tmp & 0xF000) | next;
+  }
+
+  *(uint16_t *)&fat[ent_offset]        = tmp;
+  *(uint16_t *)&fat[ent_offset + 1024] = tmp;
 }
 
 uint16_t read_file(struct inode *restrict inode, uint8_t *restrict data, uint16_t req_siz, size_t offset) {
@@ -462,7 +439,7 @@ uint16_t write_file(struct inode *restrict inode, const uint8_t *restrict data, 
 
   return write;
 }
-
+/*
 void split_path(const char *restrict path, char *restrict pr, char *restrict n) {
   char *pathbuf = strdup(path);
 
@@ -507,40 +484,6 @@ void fat_format_name(const char *restrict name, char out[restrict 11]) {
   free(tmp);
 }
 
-void list_dir(const char *path) {
-  struct inode in = {0};
-  if (fat_lookup(path, &in)) {
-    printkf("%s doesnt exist\n", path);
-    return;
-  } else if (in.type == INODE_FILE) {
-    printkf("%s is not a dir\n", path);
-  }
-
-  struct direntry *de;
-  struct direntry *start;
-
-  if (in.cluster0 == 0)
-    de = fsinfo.root_addr;
-  else {
-    de = (struct direntry *)get_addr(in.entaddr->low_cluster);
-  }
-
-  start = de;
-  for (; (de - start) < 32; de++) {
-    if (de->fname[0] == '\0')
-      break;
-    if (de->fname[0] == 0x0f)
-      continue;
-    if ((uint8_t)de->fname[0] == 0xe5)
-      continue;
-    printkf("% 8.8s % 3.3s", de->fname, de->ext);
-    if (de->fatt & FAT_SUBDIR)
-      printk(" <DIR> ");
-    else
-      printk("       ");
-    printkf("%d\n", de->size);
-  }
-}
 
 void fat_find_free(struct inode *restrict in, struct direntry **restrict d) {
   if (in->type != INODE_DIR)
@@ -575,6 +518,7 @@ uint16_t get_tim_packed(uint16_t *date) {
 
   return tim;
 }
+
 
 int fat_create(const char *restrict path, struct inode *restrict inode) {
   char parent[128];
@@ -697,114 +641,4 @@ int fat_mkdir(const char *restrict path, struct inode *restrict inode) {
   return 0;
 }
 
-/* system call abstraction */
-
-int fsys_unlink(const char *path) {
-  struct inode in = {0};
-  if (fat_lookup(path, &in)) {
-    printkf("unlink: file '%s' does not exist\n", path);
-    return 1;
-  }
-
-  in.entaddr->fname[0] = 0xe5;
-
-  return 0;
-}
-
-int fsys_mkdir(const char *path) {
-  int fd = 1;
-  for (; root_fd[fd].flags & F_USED; fd++)
-    ;
-
-  struct inode *in = malloc(sizeof(struct inode));
-  if (!fat_lookup(path, in)) {
-    printkf("err: %s already exists\n", path);
-    free(in);
-    return 0;
-  }
-
-  fat_mkdir(path, in);
-
-  root_fd[fd].inode    = in;
-  root_fd[fd].flags    = F_USED;
-  root_fd[fd].position = 0;
-
-  return fd;
-}
-
-int fsys_open(const char *fname, uint16_t flags) {
-  int fd = 1;
-  for (; root_fd[fd].flags & F_USED; fd++)
-    ; // find available fd, 0 is reserved for errors
-
-  struct inode *in = malloc(sizeof(struct inode));
-  if (fat_lookup(fname, in)) {
-    if (flags & O_CREAT) {
-      fat_create(fname, in);
-      goto ok;
-    }
-    printkf("err: '%s': no such file\n", fname);
-    free(in);
-    return 0;
-  }
-ok:
-  // going here means the file exists
-
-  root_fd[fd].inode    = in;
-  root_fd[fd].flags    = F_USED;
-  root_fd[fd].position = 0;
-
-  if (flags & O_JUSTGIVEMETHEADDRESS) {
-    root_fd[fd].flags |= F_ADDR;
-  }
-
-  return fd;
-}
-
-size_t fsys_read(int fd, uint8_t *buf, size_t n) {
-  struct file *f = &root_fd[fd];
-  if (!(f->flags & F_USED)) {
-    printkf("invalid fd %d :(\n", fd);
-    return 0;
-  }
-
-  struct inode *in   = f->inode;
-  uint16_t      read = 0;
-  if (in->type == INODE_FILE && !(f->flags & F_ADDR)) {
-    read = read_file(in, buf, n, f->position);
-    f->position += read;
-  } else if (in->type == INODE_FILE && f->flags & F_ADDR) {
-    memcpy(buf + f->position, (uint8_t *)get_addr(in->cluster0) + f->position, n);
-    f->position += n;
-    read = n;
-  }
-  return read;
-}
-
-size_t fsys_write(int fd, const uint8_t *buf, size_t n) {
-  struct file *f = &root_fd[fd];
-  if (!(f->flags & F_USED)) {
-    printkf("invalid fd %d :(\n", fd);
-    return 0;
-  }
-
-  struct inode *in    = f->inode;
-  uint16_t      write = 0;
-  if (in->type == INODE_FILE) {
-    printkf("fp: %d\n", f->position);
-    write = write_file(in, buf, n, f->position);
-    f->position += write;
-  }
-  return write;
-}
-
-int fsys_close(int fd) {
-  if (!(root_fd[fd].flags & F_USED)) {
-    return 1;
-  }
-
-  free(root_fd[fd].inode);
-  root_fd[fd].flags &= ~F_USED;
-
-  return 0;
-}
+*/

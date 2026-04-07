@@ -155,8 +155,19 @@ struct alloc {
   struct block *free[MAX_ORD + 1];
 };
 
+#define HDR_MAGIC 0xfeed
+#define PRINT_ALLOCS 0
+
+#if PRINT_ALLOCS
+  #define printgf(x, ...) printkf((x), ##__VA_ARGS__)
+#else
+  #define printgf(x, ...)
+#endif
+
 struct alloc_hdr {
   uint8_t ord;
+  uint8_t pad;
+  uint16_t magic;
 };
 
 static inline size_t ord_siz(uint8_t ord) {
@@ -271,6 +282,7 @@ static void *km_alloc(struct alloc *a, size_t siz) {
 
   struct alloc_hdr *hdr = (struct alloc_hdr *)bl;
   hdr->ord = ord;
+  hdr->magic = HDR_MAGIC;
 
   return (void *)(hdr + 1);
 }
@@ -280,9 +292,15 @@ static void km_free(struct alloc *a, void *ptr) {
     return;
 
   struct alloc_hdr *h = ((struct alloc_hdr *)ptr) - 1;
+  if(h->magic != HDR_MAGIC) {
+    printkf("free %p doesn't have proper magic! (%04x)\n", ptr, h->magic);
+    return;
+  }
   int ord = h->ord;
 
   used_mem -= ord_siz(ord);
+
+  printgf("free at %x siz %d\n", ptr, ord_siz(ord));
 
   uintptr_t off = ptr2off(a, (void *)h);
 
@@ -308,6 +326,7 @@ static void km_free(struct alloc *a, void *ptr) {
   struct block *bl =
       (struct block *)off2ptr(a, off);
 
+  h->magic = 0;
   insert_block(&a->free[ord], bl);
 }
 
@@ -321,12 +340,11 @@ void kmalloc_init() {
 
 void *malloc(size_t siz) { // todo: low-address priority allocation
   void *ptr = km_alloc(&kalloc, siz);
-  //printkf("malloc at %x\n", ptr);
+  printgf("malloc at %x siz %d (%d)\n", ptr, ord_siz(size2ord(siz)), siz);
   return ptr;
 }
 
 void free(void *ptr) {
-  //printkf("free at %x\n", ptr);
   km_free(&kalloc, ptr);
 }
 

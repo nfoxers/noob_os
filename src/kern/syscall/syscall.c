@@ -47,12 +47,12 @@ uint32_t sys_close(ARGS) {
 
 uint32_t sys_chdir(ARGS) {
   ARGS_USELESS;
-  return fsys_cd((char *)a1);
+  return fsys_chdir((char *)a1);
 }
 
 uint32_t sys_mkdir(ARGS) {
   ARGS_USELESS;
-  return fsys_mkdir((char *)a1);
+  return fsys_mkdir((char *)a1, (mode_t)a2);
 }
 
 uint32_t sys_unlink(ARGS) {

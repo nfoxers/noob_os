@@ -20,7 +20,7 @@
 
 extern void enditall();
 
-void kmain(void) {
+void setup() {
   zero_bss();
   kmalloc_init();
   init_video();
@@ -45,21 +45,25 @@ void kmain(void) {
 
   smbios_scan();
 
-  check_capat();
-  printk("time of boot: ");
-
-  print_time();
-  
   page_init();
 
-  init_rootfs();
+  init_rootfs();  
+
+
+  check_capat();
+  printk("time of boot: ");  
+  print_time();
+
+  printkf("used dynamic memory: %d K\n", getused()/1024);
+}
+
+void kmain(void) {
+  setup();
+
+  // TODO: fork and execve
 
   STI;  
   shell();
-
-  // todo: memory safety, etc
-  // todo2: FIX fat12 driver (oh lord)
-  // todo3: FIX multitasking, and SYSCALLS!!!!!!!
 
   enditall();
 

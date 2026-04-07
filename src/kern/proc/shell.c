@@ -124,7 +124,8 @@ int c_rm(char **argv, int argc) {
     return 2;
   }
 
-  if(unlink(argv[1])) perror("rm");
+  if (unlink(argv[1]))
+    perror("rm");
   return 0;
 }
 
@@ -135,7 +136,7 @@ int c_touch(char **argv, int argc) {
   }
 
   int fd = open(argv[1], O_CREAT);
-  if(fd == -1) {
+  if (fd == -1) {
     perror("touch");
     return 1;
   }
@@ -180,7 +181,7 @@ int c_mkdir(char **argv, int argc) {
   if (fd == -1) {
     perror("mkdir");
     return 1;
-}
+  }
   close(fd);
   return 0;
 }
@@ -188,7 +189,7 @@ int c_mkdir(char **argv, int argc) {
 int c_cd(char **argv, int argc) {
   if (argc == 1)
     return 0;
-  if(chdir(argv[1])) {
+  if (chdir(argv[1])) {
     perror("cd");
     return 1;
   }
@@ -236,7 +237,7 @@ int c_h(char **argv, int argc) {
 
   asm volatile(
       "mov %%cr0, %%eax\n"
-      "xor %%eax, %%eax\n"
+      "mov $0x86763726, %%eax\n"
       "mov %%eax, %%cr0\n" ::: "eax");
   return 0;
 }
@@ -247,27 +248,29 @@ int c_mused(char **argv, int argc) {
   return 0;
 }
 
-int c_copen(char **argv, int argc) {
-  ARGS_USELESS;
-  struct inode *k = lookup_vfs("KERNEL.BIN");
-  free(k);
-  printkf("mused: %d\n", getused());
-  return 0;
-}
-
 #define LDADDR 0x00
 
 int c_exec(char **argv, int argc) {
   if (argc != 2)
     return 2;
   int fd = open(argv[1], 0);
-  if(!fd) return 1;
+  if (fd == -1) {
+    perror("exec: open");
+    return 1;
+  }
 
   uint8_t *buf = malloc_align(0x1000, 0x1000);
 
-  read(fd, (char*)buf, 1024);
-  close(fd);
-
+  if(read(fd, (char *)buf, 1024) == -1) {
+    perror("exec: read");
+    free_align(buf);
+    return 1;
+  }
+  if(close(fd) == -1) {
+    perror("exec: close");
+    free_align(buf);
+    return 1;
+  }
 
   void (*f)() = (void (*)())buf;
 
@@ -275,13 +278,13 @@ int c_exec(char **argv, int argc) {
 
   spawn_proc(f, CS_K, NULL);
 
-  //free_align(buf);
+  // free_align(buf);
   return 0;
 }
 
 static char const *const cmds[] = {
     "help", "exit", "ls", "rm", "touch", "clear", "time", "bf", "lspci", "mkdir", "cd",
-    "cat", "mall", "h", "mused", "exec", "copen"};
+    "cat", "mall", "h", "mused", "exec"};
 
 int c_help(char **argv, int argc) {
   ARGS_USELESS;
@@ -297,7 +300,7 @@ int c_help(char **argv, int argc) {
 
 static int (*const ftab[])(char *argv[NARGS], int argc) = {
     c_help, c_exit, c_ls, c_rm, c_touch, c_clear, c_time, c_bf, c_lspci, c_mkdir, c_cd,
-    c_cat, c_mall, c_h, c_mused, c_exec, c_copen};
+    c_cat, c_mall, c_h, c_mused, c_exec};
 
 void shell() {
   static char buf[128];
@@ -306,7 +309,7 @@ void shell() {
 
   STI; // enable the keyboard an dstuff
   while (1) {
-    printk("input> ");
+    printkf("root@root:%s$ ", p_curproc->p_user->u_cdirname);
     int rd = kgets(buf, sizeof buf);
     putchr('\n');
 
@@ -314,7 +317,7 @@ void shell() {
       continue;
     }
 
-    char *sv;
+    char   *sv;
     char   *tok = strtok_r(buf, " ", &sv);
     uint8_t idx = 0;
     char   *argv[NARGS];

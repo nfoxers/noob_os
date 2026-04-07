@@ -102,7 +102,7 @@ void exit_cur() {
   p_curproc->p_next = next; // so we deremove p_curproc->p_next
 
   dealloc_esp(p_curproc->p_stidx);
-  general_switch();
+  sched_yield();
 }
 
 #define EF_B1 0x02
@@ -188,12 +188,6 @@ void schedule() {
   task_switch(next);
 }
 
-
-
-void general_switch() {
-  syscall(SYS_YIELD);
-}
-
 void spawn_proc(void (*f)(), uint16_t cs, void *args) {
   CLI; // be advised this only works on kernel mode
   struct proc *p = alloc_proc(f, cs, args);
@@ -213,7 +207,7 @@ void init_root_proc() {
   root.u_uid  = 0;
   root.u_gid  = 0;
   root.u_cdirname = malloc(CWD_MAXSIZ);
-  strcpy(root.u_cdirname, "/");
+  strcpy(root.u_cdirname, "/home/");
   // cdir will handled by fs
 
   //register_ex(sys_yield, SYS_INTNO);

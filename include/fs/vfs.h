@@ -43,6 +43,9 @@ struct inode;
 struct file;
 
 typedef uint32_t off_t;
+typedef int      pid_t;
+typedef int      ssize_t;
+typedef uint32_t mode_t;
 
 typedef struct dirstream {
   uint8_t count;
@@ -62,11 +65,14 @@ struct dirent {
   char d_name[DIRENT_MAXSIZ];
 };
 
+// extra comments so i dont waste dynamic memory
 struct inode_ops {
+  // *must a dynamic inode *
   struct inode *(*lookup)(struct inode *dir, const char *name);
   int (*creat)(struct inode *dir, const char *name, uint16_t flg);
   int (*unlink)(struct inode *dir, const char *name);
 
+  // *must return a dynamic DIR *
   DIR *(*opendir)(struct inode *dir);
   int (*closedir)(struct inode *dir, DIR *d);
 };
@@ -103,9 +109,19 @@ char *path_canon(const char *cwd, const char *path);
 struct inode *lookup_vfs(const char *path);
 
 /* syscalls */
+
+ssize_t fsys_read(int fd, void *buf, size_t count);
 DIR *fsys_opendir(const char *path);
 int fsys_closedir(struct inode *in, DIR *d);
+int fsys_open(const char *pathname, int flags);
+int fsys_close(int fd);
+int fsys_chdir(const char *path);
+int fsys_mkdir(const char *pathname, mode_t mode);
+int fsys_unlink(const char *pathname);
 
 void init_rootfs();
+
+/* library functions */
+int lsdir(const char *path);
 
 #endif

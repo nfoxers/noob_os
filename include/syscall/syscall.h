@@ -22,10 +22,6 @@
 #define SYS_OPENDIR  12
 #define SYS_CLOSEDIR 13
 
-typedef int      pid_t;
-typedef int      ssize_t;
-typedef uint32_t mode_t;
-
 void     syscall_init();
 uint32_t syscall(uint32_t nr, ...);
 

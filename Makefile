@@ -30,7 +30,13 @@ bin/os.img: build/boot.bin build/kern.bin build/user.bin
 	cp $< $@
 	truncate $@ -s 320K
 	mcopy -i $@ build/kern.bin ::kernel.bin
+
 	mmd -i $@ ::home
+	mmd -i $@ ::bin
+	mmd -i $@ ::etc
+	mmd -i $@ ::tmp
+	mmd -i $@ ::var
+
 	mcopy -i $@ data/data.txt ::home/data.txt
 	mmd -i $@ ::home/tdir
 	mcopy -i $@ data/data.txt ::home/tdir/data.txt

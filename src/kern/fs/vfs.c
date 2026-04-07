@@ -98,7 +98,6 @@ void close_fs(struct inode *in) {
 
 DIR *opendir_fs(struct inode *in) {
   if (in && in->ops.opendir) {
-    printkf("jumpen an open %x\n", in->ops.opendir);
     return in->ops.opendir(in);
   }
   return NULL;
@@ -113,7 +112,6 @@ int closedir_fs(struct inode *in, DIR *d) {
 
 struct inode *lookup_fs(struct inode *in, const char *name) {
   if ((in->type == INODE_DIR) && in->ops.lookup) {
-    printkf("jumpen an lok %x\n", in->ops.lookup);
     return in->ops.lookup(in, name);
   }
   return NULL;
@@ -122,11 +120,10 @@ struct inode *lookup_fs(struct inode *in, const char *name) {
 struct inode *lookup_vfs_r(const char *path, char **save) {
   char *cwd = p_curproc->p_user->u_cdirname;
 
-
   char *pth = path_canon(cwd, path);
   *save     = strdup(pth);
 
-  //printkf("cwd: %s pth: %s ok: %s \n", cwd, path, *save);
+  // printkf("cwd: %s pth: %s ok: %s \n", cwd, path, *save);
 
   int mdepth = 0;
   int depth  = 0; // skip the initial /
@@ -140,7 +137,7 @@ struct inode *lookup_vfs_r(const char *path, char **save) {
 
   char *tok = strtok_r(pth, "/", &sv);
 
-  if(!tok) { // effective path = / (root)
+  if (!tok) { // effective path = / (root)
     struct inode *in = malloc(sizeof(struct inode));
     memcpy(in, inode, sizeof(struct inode));
     free(pth);
@@ -179,22 +176,54 @@ struct inode *lookup_vfs(const char *path) {
 }
 
 /* system call abstractions */
+/* these syscals MUST NOT return NULL or zeroes for error. 0 is for ERR_OK (no errors at all!)*/
+// as negatives are handled by the syscall interrupt handler (changes errno)
+
+ssize_t fsys_read(int fd, void *buf, size_t count) {
+  (void)(fd + buf + count);
+  return -ENOSYS;
+}
+
+int fsys_open(const char *pathname, int flags) {
+  (void)(pathname + flags);
+  return -ENOSYS;
+}
+
+int fsys_close(int fd) {
+  (void)fd;
+  return -ENOSYS;
+}
+
+int fsys_mkdir(const char *path, mode_t mode) {
+  (void)(path + mode);
+  return -ENOSYS;
+}
+
+int fsys_unlink(const char *pathname) {
+  (void)pathname;
+  return -ENOSYS;
+}
 
 DIR *fsys_opendir(const char *path) {
   if (!path)
-    return NULL;
+    return (DIR *)-EFAULT;
 
   struct inode *in = lookup_vfs(path);
 
-  return opendir_fs(in);
+  DIR *ret = opendir_fs(in);
+  free(in);
+
+  return ret;
 };
 
 int fsys_closedir(struct inode *in, DIR *d) {
-  printkf("closedir on in %x\n", d->in);
+  // printkf("closedir on in %x\n", in);
   return closedir_fs(in, d);
 }
 
-int fsys_cd(const char *path) {
+int fsys_chdir(const char *path) {
+  if (!path)
+    return -EFAULT;
   char *pth;
 
   struct inode *inp = lookup_vfs_r(path, &pth);
@@ -220,26 +249,50 @@ int fsys_cd(const char *path) {
 }
 
 /* convenience functions */
+// now these can return whatever they want
+
+const char *plist[] = {
+    "---",
+    "--x",
+    "-w-",
+    "-wx",
+    "r--",
+    "r-x",
+    "rw-",
+    "rwx"};
+
+char *permget(uint16_t type, uint16_t perm) {
+#define SIZ_s 3 * 3 + 1 + 1
+  char *s = malloc(SIZ_s);
+  memset(s, 0, SIZ_s);
+
+  s[0] = type & INODE_DIR ? 'd' : '-';
+  memcpy(s + 1, plist[(perm >> 6) & 7], 3);
+  memcpy(s + 4, plist[(perm >> 3) & 7], 3);
+  memcpy(s + 7, plist[(perm >> 0) & 7], 3);
+
+  return s;
+}
 
 int lsdir(const char *path) {
   // printkf("cwd: %s\n", p_curproc->p_user->u_cdirname);
 
-  DIR *d = opendir(path);
+  DIR *const d = opendir(path);
   if (!d) {
     perror("ls: opendir");
     return 1;
   }
 
   for (int i = 0; i < d->count; i++) {
-    printkf("%-13.13s", d[i].data);
-    if (d[i].type & INODE_DIR)
-      printkf(" <DIR> ");
-    else
-      printkf("       ");
-    printkf("%d\n", d[i].size);
+    char *p = permget(d[i].type, d[i].in->permission);
+    printkf("%s ", p);
+    free(p);
+
+    d[i].size ? printkf("% 4d ", d[i].size) : printkf("     ");    
+    printkf("%s\n", d[i].data);
   }
 
-  printkf("pat: %s\n", path);
+  // printkf("pat: %s\n", path);
 
   struct inode *in = lookup_vfs(path);
 
