@@ -35,6 +35,11 @@ uint32_t sys_read(ARGS) {
   return fsys_read(a1, (void*)a2, a3);
 }
 
+uint32_t sys_write(ARGS) {
+  ARGS_USELESS;
+  return fsys_write(a1, (void*)a2, a3);
+}
+
 uint32_t sys_open(ARGS) {
   ARGS_USELESS;
   return fsys_open((char *)a1, a2);
@@ -78,11 +83,16 @@ uint32_t sys_closedir(ARGS) {
   return fsys_closedir((struct inode *)a1, (DIR *)a2);
 }
 
+uint32_t sys_pipe(ARGS) {
+  ARGS_USELESS;
+  return fsys_pipe((int *)a1);
+}
+
 /* jump table & handlers */
 
 const syshand systab[NSYS] = {
-    0, 0, 0, sys_read, 0, sys_open, sys_close, 0, sys_yield, sys_chdir, sys_mkdir,
-  sys_unlink, sys_opendir, sys_closedir};
+    0, 0, 0, sys_read, sys_write, sys_open, sys_close, 0, sys_yield, sys_chdir, sys_mkdir,
+  sys_unlink, sys_opendir, sys_closedir, sys_pipe};
 
 void sys_hand(struct regs *r) {
   syshand e = systab[r->eax];

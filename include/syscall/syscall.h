@@ -21,6 +21,7 @@
 #define SYS_UNLINK   11
 #define SYS_OPENDIR  12
 #define SYS_CLOSEDIR 13
+#define SYS_PIPE     14
 
 void     syscall_init();
 uint32_t syscall(uint32_t nr, ...);
@@ -44,6 +45,7 @@ int sched_yield();
 int chdir(const char *path);
 int mkdir(const char *pathname, mode_t mode);
 int unlink(const char *path);
+int pipe(int fd[2]);
 
 // doesnt even exist in linux syscall table
 

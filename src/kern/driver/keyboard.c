@@ -1,5 +1,7 @@
 #include "driver/keyboard.h"
 #include "cpu/idt.h"
+#include "lib/errno.h"
+#include "syscall/syscall.h"
 #include "video/printf.h"
 #include "video/video.h"
 #include <stdint.h>
@@ -63,6 +65,9 @@ uint8_t special_press(uint8_t scan) {
   return 0;
 }
 
+static int k_stdin  = 0;
+static int k_stdout = 1;
+
 uint8_t parse_char(uint8_t scan) {
   if (scan == K_SPECIAl) {
     kbd_ctrl.k_spcl++;
@@ -79,7 +84,8 @@ uint8_t parse_char(uint8_t scan) {
   if (kbd_ctrl.k_spcl) {
     kbd_ctrl.k_spcl &= 0;
 
-    if(!press) return 0;
+    if (!press)
+      return 0;
 
     if (scan == 0x49) {
       vscroll_up();
@@ -132,11 +138,12 @@ static void kbd_handler(struct regs *r) {
   uint8_t ch = parse_char(scan);
 
   if (ch) {
-    uint8_t next = (head + 1) % K_BUFSIZ;
-
-    kbd_buffer[head] = ch;
-
-    head = next;
+    // uint8_t next = (head + 1) % K_BUFSIZ;
+    // kbd_buffer[head] = ch;
+    // head = next;
+    if (write(k_stdout, &ch, 1) == -1) {
+      perror("kbd: write");
+    }
   }
 
   pic_eoi();
@@ -145,19 +152,21 @@ static void kbd_handler(struct regs *r) {
 void init_ps2() {
   outb(0x64, 0xad); // disable devs
   outb(0x64, 0xa7);
-  for(int i = 0; i < 10; i++) inb(0x60); // flush
-  
+  for (int i = 0; i < 10; i++)
+    inb(0x60); // flush
+
   outb(0x64, 0x20);
   uint8_t ccb = inb(0x60);
-  ccb = 0b01000100;
+  ccb         = 0b01000100;
   outb(0x64, 0x60);
   outb(0x60, ccb);
 
   outb(0x64, 0xaa); // self test
   uint8_t ret = inb(0x60);
-  if(ret != 0x55) {
+  if (ret != 0x55) {
     printkf("ps/2 cont error %x %x\n", ret, inb(0x60));
-    while(1) asm volatile("hlt");
+    while (1)
+      asm volatile("hlt");
   }
 
   outb(0x64, 0xae); // enable again
@@ -168,14 +177,26 @@ void init_ps2() {
   outb(0x60, ccb);
 }
 
-void init_kbd() {
-  print_init("kbd", "initializing the keyboard...", 0);
+int init_kbd() {
+
+  int fd[2];
+  if (pipe(fd) == -1) {
+    print_init("kbd", "initializing the keyboard...", 1);
+    return 1;
+  }
+
+  k_stdout = fd[1];
+  k_stdin  = fd[0];
+
   init_ps2();
   register_irq(kbd_handler, 1);
   pic_cm(1);
+  print_init("kbd", "intializing the keyboard...", 0);
+  return 0;
 }
 
 uint8_t getch() {
+  /*
   while (head == tail)
     ;
 
@@ -184,6 +205,19 @@ uint8_t getch() {
 
   tail = (tail + 1) % K_BUFSIZ;
   STI;
+  */
+
+  int c = 0;
+  int r;
+retry:
+  r = read(k_stdin, &c, 1);
+  if (r == -1) {
+    if (errno == EAGAIN) {
+      goto retry;
+    }
+    perror("read");
+  }
+
   return c;
 }
 

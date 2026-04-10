@@ -32,7 +32,8 @@ void setup() {
   init_pic();
   init_fs();
 
-  init_kbd();
+  init_rootfs(); 
+
   set_gdt();
   set_apic();
   
@@ -46,8 +47,8 @@ void setup() {
   smbios_scan();
 
   page_init();
-
-  init_rootfs();  
+  init_kbd();
+ 
 
 
   check_capat();
@@ -61,7 +62,13 @@ void kmain(void) {
   setup();
 
   // TODO: fork and execve
-
+  /*
+  int fd[2];
+  if(pipe(fd) == -1) perror("pipe");
+  printkf("fd: %d %d\n", fd[0], fd[1]);
+  if(close(fd[0]) == -1) perror("close");
+  if(close(fd[1]) == -1) perror("close");
+*/
   STI;  
   shell();
 

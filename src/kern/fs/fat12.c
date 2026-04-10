@@ -27,10 +27,10 @@ struct fat12info {
 
 struct fat12info fsinfo = {0};
 
-struct file root_fd[NOFILE] = {0};
-
 extern struct inode root_dir;
 extern struct proc *volatile p_curproc;
+
+#define ofile p_curproc->p_user->u_ofile
 
 void set_vfs(struct inode *);
 
@@ -43,8 +43,8 @@ void init_fs() {
   }
 
   fsinfo.fat_sectors = BS->fats * BS->spf;
-  fsinfo.fat_addr    = fsinfo.fat_sectors * 512 + 0x7c00;
   fsinfo.fat_start   = BS->sec_reserved;
+  fsinfo.fat_addr    = fsinfo.fat_start * 512 + 0x7c00;
 
   fsinfo.root_start   = fsinfo.fat_sectors + fsinfo.fat_start;
   fsinfo.root_addr    = (struct direntry *)(fsinfo.root_start * 512 + 0x7c00);
@@ -63,6 +63,10 @@ void init_fs() {
   set_vfs(&root_dir);
 
   memcpy(&p_curproc->p_user->u_cdir, &root_dir, sizeof(struct inode));
+
+  for(int i = 0; i < NOFILE; i++) {
+    ofile[i] = 0;
+  }
 }
 
 void tolowers(char *c) {
@@ -143,6 +147,13 @@ void fat2normal(const char *fname, const char *ext, char *buf) {
   *buf = 0;
 }
 
+
+/* forward declarations */
+
+int fat_read(struct inode *in, void *buf, size_t off, size_t count);
+
+/* syscall functions */
+
 DIR *opendir_fat(struct inode *in) {
   if (!in || in->type != INODE_DIR)
     return NULL;
@@ -170,7 +181,7 @@ DIR *opendir_fat(struct inode *in) {
 
     d[i].in         = malloc(sizeof(struct inode));
     struct inode *k = finddir_fat(in, buf);
-    
+
     if (!k) {
       free(d[i].in);
       d[i].in = NULL;
@@ -201,10 +212,92 @@ int closedir_fat(struct inode *dir, DIR *d) {
   return 0;
 }
 
+int create_fat(struct inode *dir, const char *name, uint16_t flg) {
+  (void)dir;
+  (void)name;
+  (void)flg;
+  return -ENOSYS;
+}
+
+int unlink_fat(struct inode *dir, const char *name) {
+  struct inode buf;
+  if(fat_lookup_from(name, dir, &buf)) {
+    return -ENOENT;
+  }
+
+  buf.entaddr->fname[0] = 0xe5;
+
+  return 0;
+}
+
+int open_fat(struct inode *dir, const char *restrict pth, uint16_t flg) {
+  (void)dir; (void)flg;
+
+  int fd = findfreefd();
+
+  struct inode *buf = malloc(sizeof(struct inode));
+  if(fat_lookup_from(pth, dir, buf)) {
+    // todo: O_CREAT
+    free(buf);
+    return -ENOENT;
+  }
+
+  ofile[fd] = malloc(sizeof(struct file));
+
+  ofile[fd]->flags = flg | F_USED;
+  ofile[fd]->position = 0;
+  ofile[fd]->inode = buf;
+
+  return 0;
+}
+
+int close_fat(struct inode *in, int fd) {
+  (void)in;
+  
+  if(!ofile[fd]) return -EBADF;
+  if(!(ofile[fd]->flags & F_USED)) return -EBADF;
+  if(fd >= NOFILE) return -EBADF;
+  if(!ofile[fd]->inode) return -EBADF;
+
+  ofile[fd]->flags &= ~F_USED;
+  ofile[fd]->position = 0;
+  free(ofile[fd]->inode);
+  free(ofile[fd]);
+
+  return 0;
+}
+
+int read_fat(struct inode *in, void *buf, size_t off, size_t siz) {
+  (void)in;
+  (void)buf;
+  (void)off;
+  (void)siz;
+
+  if(!(in->permission & S_IRUSR)) return -EPERM;
+  size_t ret = fat_read(in, buf, off, siz);
+
+  return ret;
+}
+
+int write_fat(struct inode *in, const void *buf, size_t off, size_t siz) {
+  (void)in;
+  (void)buf;
+  (void)off;
+  (void)siz;
+  return -ENOSYS;
+}
+
 void set_vfs(struct inode *in) {
   in->ops.lookup   = finddir_fat;
   in->ops.opendir  = opendir_fat;
   in->ops.closedir = closedir_fat;
+  in->ops.creat    = create_fat;
+  in->ops.unlink   = unlink_fat;
+
+  in->fops.open = open_fat;
+  in->fops.close = close_fat;
+  in->fops.read = read_fat;
+  in->fops.write = write_fat;
 }
 
 int fat_lookup_from(const char *restrict path, const struct inode *restrict from, struct inode *restrict buf) {
@@ -227,7 +320,7 @@ int fat_lookup_from(const char *restrict path, const struct inode *restrict from
     found = 0;
 
     if (cluster == 0) {
-      dr = get_addr(from->entaddr->low_cluster);
+      dr      = get_addr(from->entaddr->low_cluster);
       entries = 32;
     } else if (cluster == 0x7fffff00) {
       // dr      = get_addr(from->entaddr->low_cluster);
@@ -275,49 +368,28 @@ int fat_lookup_from(const char *restrict path, const struct inode *restrict from
   return 0;
 }
 
-int find_home(struct inode *buf) {
-  struct direntry *dr = fsinfo.root_addr;
 
-  int found = 0;
-  for (int i = 0; i < 32; i++) {
-    if (dr[i].fname[0] == 0x00)
-      break;
-    if ((uint8_t)dr[i].fname[0] == 0xE5)
-      continue;
-    if (fat_name_match(&dr[i], "home")) {
-      found++;
 
-      buf->entaddr  = &dr[i];
-      buf->cluster0 = dr[i].low_cluster;
-      buf->type     = INODE_DIR;
-
-      set_vfs(buf);
-
-      break;
-    }
-  }
-
-  if (!found)
-    return 1;
-  return 0;
-}
 
 /* inner filesystem */
 
-uint16_t fat_value(uint16_t cluster) {
-  uint8_t *fat        = (uint8_t *)(fsinfo.fat_start * 512 + 0x7c00);
+uint16_t fattab_read(uint16_t cluster) {
+  uint8_t *fat        = (uint8_t*)(uintptr_t)fsinfo.fat_addr;
   uint16_t fat_offset = cluster + (cluster / 2);
   uint16_t ent_offset = fat_offset % 1024;
 
   uint16_t val = *(uint16_t *)&fat[ent_offset];
+  if(val != *(uint16_t *)&fat[ent_offset + 1024]) {
+    printkf("warn: two fat tables are different at offset %x\n", ent_offset);
+  }
 
   val = (cluster & 1) ? val >> 4 : val & 0xfff;
 
   return val;
 }
 
-void write_fat(uint16_t cluster, uint16_t next) {
-  uint8_t *fat        = (uint8_t *)(fsinfo.fat_start * 512 + 0x7c00);
+void fattab_write(uint16_t cluster, uint16_t next) {
+  uint8_t *fat        = (uint8_t*)(uintptr_t)fsinfo.fat_addr;
   uint16_t fat_offset = cluster + (cluster / 2);
   uint16_t ent_offset = fat_offset % 1024;
 
@@ -335,310 +407,36 @@ void write_fat(uint16_t cluster, uint16_t next) {
   *(uint16_t *)&fat[ent_offset + 1024] = tmp;
 }
 
-uint16_t read_file(struct inode *restrict inode, uint8_t *restrict data, uint16_t req_siz, size_t offset) {
-  if (offset >= inode->size)
-    return 0;
+int fat_read(struct inode *in, void *buf, size_t off, size_t count) {
+  if(!in ||!buf) return 0;
 
-  uint16_t to_read = MIN(req_siz, inode->size - offset);
+  uint16_t cluster = in->entaddr->low_cluster;
+  size_t read = 0;
 
-  uint16_t cluster = inode->cluster0;
+  cluster = off > 1024 ? fattab_read(cluster) : cluster;
+  off = off % 1024;
 
-  for (size_t i = 0; i < offset / 1024; i++)
-    cluster = fat_value(cluster);
+  while(cluster < 0xff8) {
+    void *addr = get_addr(cluster);
+    
+    size_t dcount = 1024 - off;
+    dcount = dcount > count ? count : dcount;
 
-  size_t   cluster_off = offset % 1024;
-  uint16_t read        = 0;
+    //printkf("dcount: %d\n", dcount);
 
-  while ((cluster < 0xFF8) && (read < to_read)) {
+    memcpy(buf, addr + off, dcount);
 
-    size_t addr = (cluster - 2) * 1024 + fsinfo.data_addr;
+    if(dcount > count) {
+      printkf("fat read: overflow!\n");
+      break;
+    }
 
-    uint16_t chunk = MIN(1024 - cluster_off, to_read - read);
+    count -= dcount;
+    read += dcount;
 
-    memcpy(data + read, (uint8_t *)(addr + cluster_off), chunk);
-
-    read += chunk;
-    cluster_off = 0;
-    cluster     = fat_value(cluster);
+    off = 0;
+    cluster = fattab_read(cluster);
   }
 
   return read;
 }
-
-uint16_t last_cluster(uint16_t cur) {
-  for (; fat_value(cur) < 0xff8; cur = fat_value(cur))
-    ;
-  return cur;
-}
-
-uint16_t find_free_cluster() {
-  uint16_t i = 2;
-  while (fat_value(i++) != 0)
-    ;
-  return i - 1;
-}
-
-uint16_t write_file(struct inode *restrict inode, const uint8_t *restrict data, size_t req_siz, size_t offset) {
-
-  uint16_t cluster = inode->cluster0;
-  for (size_t i = 0; i < offset / 1024; i++)
-    cluster = fat_value(cluster);
-
-  uint16_t cluster_end = last_cluster(cluster);
-  size_t   cluster_off = offset % 1024;
-
-  uint16_t clusters     = inode->size / 1024;
-  uint16_t req_clusters = req_siz / 1024;
-
-  int16_t diff = req_clusters - clusters;
-  if (diff <= 0) {
-    uint16_t write = 0;
-    while ((cluster < 0xff8) && (write < req_siz)) {
-      uint16_t next = fat_value(cluster);
-
-      uint16_t writemax = MIN(1024 - cluster_off, req_siz - write);
-
-      size_t addr = (cluster - 2) * 1024 + fsinfo.data_addr + cluster_off;
-      memcpy((uint8_t *)addr, data + write, writemax);
-      write += writemax;
-
-      cluster     = next;
-      cluster_off = 0;
-    }
-    return write;
-  }
-
-  uint16_t prev = cluster_end;
-
-  while (diff--) {
-    uint16_t new = find_free_cluster();
-
-    write_fat(prev, new);
-    write_fat(new, 0xfff);
-
-    prev = new;
-  }
-
-  uint16_t write = 0;
-  while ((cluster < 0xff8) && (write < req_siz)) {
-    uint16_t next = fat_value(cluster);
-
-    uint16_t writemax = MIN(1024 - cluster_off, req_siz - write);
-
-    size_t addr = (cluster - 2) * 1024 + fsinfo.data_addr + cluster_off;
-    memcpy((uint8_t *)addr, data + write, writemax);
-    write += writemax;
-
-    cluster     = next;
-    cluster_off = 0;
-  }
-
-  struct direntry *d = inode->entaddr;
-
-  d->size = req_siz + offset;
-
-  return write;
-}
-/*
-void split_path(const char *restrict path, char *restrict pr, char *restrict n) {
-  char *pathbuf = strdup(path);
-
-  char *last = strrchr(pathbuf, '/');
-
-  char *parent;
-  char *name;
-
-  if (last) {
-    *last  = 0;
-    parent = pathbuf;
-    name   = last + 1;
-  } else {
-    parent = "";
-    name   = pathbuf;
-  }
-
-  strcpy(pr, parent);
-  strcpy(n, name);
-
-  free(pathbuf);
-}
-
-void fat_format_name(const char *restrict name, char out[restrict 11]) {
-  char fname[9] = {0};
-  char ext[4]   = {0};
-
-  char *tmp = strdup(name);
-
-  char *sv;
-  char *f = strtok_r(tmp, ".", &sv);
-  char *e = strtok_r(NULL, ".", &sv);
-
-  if (f)
-    snprintkf(fname, sizeof(fname), "%-8s", f);
-  if (e)
-    snprintkf(ext, sizeof(ext), "%-3s", e);
-
-  memcpy(out, fname, 8);
-  memcpy(out + 8, ext, 3);
-
-  free(tmp);
-}
-
-
-void fat_find_free(struct inode *restrict in, struct direntry **restrict d) {
-  if (in->type != INODE_DIR)
-    return;
-
-  struct direntry *a;
-  if (!(in->cluster0))
-    a = fsinfo.root_addr;
-  else
-    a = (struct direntry *)((in->cluster0 - 2) * 1024 + fsinfo.data_addr);
-  while (a->fname[0])
-    a++;
-  *d = a;
-}
-
-uint16_t get_tim_packed(uint16_t *date) {
-  struct time_s time;
-  read_time(&time);
-
-  uint16_t tim = 0;
-
-  tim |= time.sec / 2 & 0b11111;
-  tim |= (time.min & 0b111111) << 5;
-  tim |= (time.hour & 0b11111) << 11;
-
-  if (date) {
-    *date = 0;
-    *date |= time.day & 0b11111;
-    *date |= (time.mon & 0b1111) << 5;
-    *date |= ((time.year + 20) & 0b1111111) << 9;
-  }
-
-  return tim;
-}
-
-
-int fat_create(const char *restrict path, struct inode *restrict inode) {
-  char parent[128];
-  char name[32];
-
-  split_path(path, parent, name);
-
-  struct inode dir = {0};
-
-  if (parent[0]) {
-    if (fat_lookup(parent, &dir))
-      return 0;
-
-    if (dir.type != INODE_DIR)
-      return 0;
-  } else {
-    dir.cluster0 = p_curproc->p_user->u_cdir.cluster0; // cur_dir
-    dir.type     = INODE_DIR;
-  }
-
-  struct direntry *slot = NULL;
-  fat_find_free(&dir, &slot);
-  if (!slot) {
-    printk("fail\n");
-    return 0;
-  }
-
-  char fatname[11];
-  fat_format_name(name, fatname);
-
-  memcpy(slot->fname, fatname, 8);
-  memcpy(slot->ext, fatname + 8, 3);
-
-  slot->fatt        = 0;
-  slot->size        = 0;
-  slot->low_cluster = find_free_cluster();
-
-  uint16_t date     = 0;
-  slot->create_time = get_tim_packed(&date);
-  slot->lm_time     = slot->create_time;
-  slot->create_date = date;
-  slot->lm_date     = date;
-  slot->la_date     = date;
-
-  inode->cluster0 = slot->low_cluster;
-  inode->size     = 0;
-  inode->type     = INODE_FILE;
-  inode->entaddr  = slot;
-
-  write_fat(slot->low_cluster, 0xfff);
-
-  return 0;
-}
-
-void create_dots(struct direntry *dir, uint16_t lcp) { // dir = direntry in parent
-  struct direntry *d = (struct direntry *)get_addr(dir->low_cluster);
-
-  snprintkf(d->fname, 13, "%-13c", '.');
-  d->low_cluster = dir->low_cluster;
-  d->fatt        = FAT_SUBDIR;
-  d->create_time = d->lm_time = dir->lm_time;
-  d->create_date = d->lm_date = d->la_date = dir->la_date;
-
-  d++;
-
-  snprintkf(d->fname, 13, "%-13s", "..");
-  d->low_cluster = lcp;
-  d->fatt        = FAT_SUBDIR;
-  d->create_time = d->lm_time = dir->lm_time;
-  d->create_date = d->lm_date = d->la_date = dir->la_date;
-}
-
-int fat_mkdir(const char *restrict path, struct inode *restrict inode) {
-  char parent[128];
-  char name[32];
-
-  split_path(path, parent, name);
-
-  struct inode dir = {0};
-
-  if (parent[0]) {
-    if (fat_lookup(parent, &dir))
-      return 0;
-
-    if (dir.type != INODE_DIR)
-      return 0;
-  } else {
-    dir.cluster0 = p_curproc->p_user->u_cdir.cluster0; // cur_dir
-    dir.type     = INODE_DIR;
-  }
-
-  struct direntry *slot = NULL;
-  fat_find_free(&dir, &slot);
-  if (!slot) {
-    printk("fail\n");
-    return 0;
-  }
-
-  snprintkf(slot->fname, 13, "%-13.13s", name);
-
-  slot->fatt        = FAT_SUBDIR;
-  slot->size        = 0;
-  slot->low_cluster = find_free_cluster();
-
-  uint16_t date     = 0;
-  slot->create_time = get_tim_packed(&date);
-  slot->lm_time     = slot->create_time;
-  slot->create_date = date;
-  slot->lm_date     = date;
-  slot->la_date     = date;
-  create_dots(slot, dir.cluster0);
-
-  inode->cluster0 = slot->low_cluster;
-  inode->size     = 0;
-  inode->type     = INODE_DIR;
-  inode->entaddr  = slot;
-
-  write_fat(slot->low_cluster, 0xfff);
-
-  return 0;
-}
-
-*/

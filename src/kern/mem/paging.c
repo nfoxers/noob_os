@@ -28,12 +28,14 @@ void page_init() {
   pagetab = malloc_align(4 * NOPAGES, 0x1000);
   pagedir = malloc_align(4, 0x1000);
 
-  print_info("pg", 1, "page table addresss: %p", pagetab);
-  print_info("pg", 0, "page dir addresss: %p", pagedir);
+  print_info("pg", 1, "page table address: %p", pagetab);
+  print_info("pg", 0, "page dir address: %p", pagedir);
 
   for (int i = 0; i < NOPAGES; i++) {
     pagetab[i] = (i * 0x1000) | PAGE_ATTR;
   }
+
+  pagetab[0] &= ~1;
 
   *pagedir = (uint32_t)pagetab | PDIR_ATTR;
   switch_pd(pagedir);

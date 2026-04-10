@@ -30,7 +30,7 @@ void read_time(struct tm *tim) {
     tim->tm_min  = read_cmos(RTC_MIN);
     tim->tm_hour = read_cmos(RTC_HOR);
 
-    tim->tm_yday  = read_cmos(RTC_DAY);
+    tim->tm_yday = read_cmos(RTC_DAY);
     tim->tm_mon  = read_cmos(RTC_MON);
     tim->tm_year = read_cmos(RTC_JHR);
 
@@ -41,7 +41,7 @@ void read_time(struct tm *tim) {
   tim->tm_min  = normal(read_cmos(RTC_MIN));
   tim->tm_hour = normal(read_cmos(RTC_HOR));
 
-  tim->tm_yday  = normal(read_cmos(RTC_DAY));
+  tim->tm_yday = normal(read_cmos(RTC_DAY));
   tim->tm_mon  = normal(read_cmos(RTC_MON));
   tim->tm_year = normal(read_cmos(RTC_JHR));
 }
@@ -97,7 +97,7 @@ void init_pit(uint32_t freq) {
   pic_cm(0);
 }
 
-/* note from nfoxers: code below taken from the linux kernel 0.01 source*/
+/* note from nfoxers: code below taken from the linux kernel 0.01 source */
 
 /*
  * This isn't the library routine, it is only used in the kernel.
@@ -146,4 +146,10 @@ long mktime(struct tm *tm) {
   res += MINUTE * tm->tm_min;
   res += tm->tm_sec;
   return res;
+}
+
+struct tm *gmtime_r(const time_t *restrict timep, struct tm *restrict result) {
+  time_t t = *timep;
+  (void)t;
+  return result;
 }

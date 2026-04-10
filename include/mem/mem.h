@@ -18,6 +18,9 @@ extern uint8_t __bss_end__;
 #define BSS_END   (&__bss_end__)
 #define BSS_START (&__bss_start__)
 
+#define ALLOC_EXTRALOG 0
+#define PRINT_ALLOCS   0
+
 struct bios_da {
   uint16_t com_port[4];
   uint16_t lpt_port[3];
@@ -45,9 +48,15 @@ char   *strrchr(const char *s, int c);
 char *strdup(const char *s);
 void  zero_bss();
 
-void  kmalloc_init();
+void kmalloc_init();
+
+#if !ALLOC_EXTRALOG
 void *malloc(size_t size);
-void  free(void *ptr);
+#else
+#define malloc(size) ({ void *malloc_log(size_t siz); void *ptr = malloc_log((size)); printkf("malloc %d at line %d file %s\n", (size), __LINE__, __FILE__); ptr; })
+#endif
+
+void free(void *ptr);
 
 void  *malloc_align(size_t siz, size_t align);
 void   free_align(void *ptr);

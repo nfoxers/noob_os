@@ -113,9 +113,24 @@ int c_exit(char **argv, int argc) {
 
 int c_ls(char **argv, int argc) {
   if (argc == 1) {
-    return lsdir(".");
+    return lsdir(".", 0);
   }
-  return lsdir(argv[1]);
+
+  char *pth = argv[1];
+  if (*pth == '-') {
+    if (*(pth + 1) == 'l') {
+      if (argc == 2) {
+        return lsdir(".", 1);
+      } else {
+        pth = argv[2];
+        return lsdir(pth, 1);
+      }
+
+    } else
+      return 2;
+  }
+
+  return lsdir(pth, 0);
 }
 
 int c_rm(char **argv, int argc) {
@@ -182,7 +197,10 @@ int c_mkdir(char **argv, int argc) {
     perror("mkdir");
     return 1;
   }
-  close(fd);
+  if (close(fd) == -1) {
+    perror("close");
+    return 1;
+  }
   return 0;
 }
 
@@ -202,19 +220,26 @@ int c_cat(char **argv, int argc) {
     return 2;
   }
 
-  int fd = open(argv[1], 0);
-  if (!fd)
+  int fd = open(argv[1], O_RDONLY);
+  if (fd == -1) {
+    perror("cat: open");
     return 1;
+}
 
   uint8_t *buf = malloc(1024);
 
-  printkf("fd: %d\n\n", fd);
+  //printkf("fd: %d\n\n", fd);
 
-  read(fd, (char *)buf, 1024);
+  if(read(fd, (char *)buf, 1024) == -1) {
+    perror("cat: read");
+    if(close(fd) == -1) perror("cat: close");
+    free(buf);
+    return 1;
+  }
 
   printkf("%.1024s\n", buf);
 
-  close(fd);
+  if(close(fd) == -1) perror("cat: close2");
   free(buf);
   return 0;
 }
@@ -253,7 +278,7 @@ int c_mused(char **argv, int argc) {
 int c_exec(char **argv, int argc) {
   if (argc != 2)
     return 2;
-  int fd = open(argv[1], 0);
+  int fd = open(argv[1], O_RDONLY);
   if (fd == -1) {
     perror("exec: open");
     return 1;
@@ -261,12 +286,12 @@ int c_exec(char **argv, int argc) {
 
   uint8_t *buf = malloc_align(0x1000, 0x1000);
 
-  if(read(fd, (char *)buf, 1024) == -1) {
+  if (read(fd, (char *)buf, 1024) == -1) {
     perror("exec: read");
     free_align(buf);
     return 1;
   }
-  if(close(fd) == -1) {
+  if (close(fd) == -1) {
     perror("exec: close");
     free_align(buf);
     return 1;

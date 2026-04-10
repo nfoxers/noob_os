@@ -61,3 +61,7 @@ DIR *opendir(const char *path) {
 int closedir(struct inode *in, DIR *d) {
   return syscall(SYS_CLOSEDIR, in, d);
 } 
+
+int pipe(int fd[2]) { // 42
+  return syscall(SYS_PIPE, fd);
+}

@@ -1,7 +1,7 @@
 ENTRY(_start)
 SECTIONS
 {  
-  . = 0x500;
+  . = 0x1000;
   .bss : {
     __bss_start__ = .;
     *(.bss*)

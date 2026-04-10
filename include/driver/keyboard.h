@@ -3,7 +3,7 @@
 
 #include "stdint.h"
 
-void init_kbd();
+int init_kbd();
 uint8_t getch();
 
 int kgets(char *s, uint16_t siz);

@@ -23,7 +23,7 @@ uint8_t dlim(char c, const char *delim) {
 }
 
 char *strtok_r(char *restrict str, const char *restrict delim, char **saveptr) {
-  char *start;
+  char  *start;
   char **next = saveptr;
 
   if (str != NULL)
@@ -135,8 +135,8 @@ void zero_bss() {
 }
 
 char *strdup(const char *s) {
-  char *a = malloc(strlen(s)+1);
-  memcpy(a, s, strlen(s)+1);
+  char *a = malloc(strlen(s) + 1);
+  memcpy(a, s, strlen(s) + 1);
   return a;
 }
 
@@ -150,33 +150,33 @@ struct block {
 };
 
 struct alloc {
-  uint8_t *base;
-  size_t siz;
+  uint8_t      *base;
+  size_t        siz;
   struct block *free[MAX_ORD + 1];
 };
 
-#define HDR_MAGIC 0xfeed
-#define PRINT_ALLOCS 0
+#define HDR_MAGIC 0x8b6a96a2
 
 #if PRINT_ALLOCS
-  #define printgf(x, ...) printkf((x), ##__VA_ARGS__)
+#define printgf(x, ...) printkf((x), ##__VA_ARGS__)
 #else
-  #define printgf(x, ...)
+#define printgf(x, ...)
 #endif
 
 struct alloc_hdr {
-  uint8_t ord;
-  uint8_t pad;
-  uint16_t magic;
-};
+  uint8_t  ord;
+  uint8_t  pad;
+  uint32_t magic;
+  uint16_t pad2;
+} __attribute__((packed));
 
 static inline size_t ord_siz(uint8_t ord) {
   return (size_t)1 << ord;
 }
 
 static int size2ord(size_t siz) {
-  int ord = MIN_ORD;
-  size_t s = (size_t)1 << ord;
+  int    ord = MIN_ORD;
+  size_t s   = (size_t)1 << ord;
   while (s < siz) {
     s <<= 1;
     ord++;
@@ -206,12 +206,12 @@ static int remove_block(struct block **head, struct block *target) {
 
 static void insert_block(struct block **head, struct block *b) {
   struct block **cur = head;
-  while(*cur && *cur < b) {
+  while (*cur && *cur < b) {
     cur = &(*cur)->next;
   }
 
   b->next = *cur;
-  *cur = b;
+  *cur    = b;
 }
 
 static void km_init(struct alloc *a, void *mem, size_t siz) {
@@ -225,13 +225,13 @@ static void km_init(struct alloc *a, void *mem, size_t siz) {
   size_t max_block = (size_t)1 << max_ord;
 
   // align in worsdt case scenario
-  uintptr_t base = (uintptr_t)mem;
+  uintptr_t base    = (uintptr_t)mem;
   uintptr_t aligned = ALIGN_UP(base, max_block);
-  size_t adjust = aligned - base;
+  size_t    adjust  = aligned - base;
 
   if (adjust >= siz) {
     a->base = NULL;
-    a->siz = 0;
+    a->siz  = 0;
     return;
   }
 
@@ -239,10 +239,10 @@ static void km_init(struct alloc *a, void *mem, size_t siz) {
   siz &= ~(max_block - 1); // truncate to multiple
 
   a->base = (uint8_t *)aligned;
-  a->siz = siz;
+  a->siz  = siz;
 
   struct block *init = (struct block *)a->base;
-  init->next = NULL;
+  init->next         = NULL;
 
   a->free[max_ord] = init;
 }
@@ -250,10 +250,10 @@ static void km_init(struct alloc *a, void *mem, size_t siz) {
 static size_t used_mem = 0;
 
 static void *km_alloc(struct alloc *a, size_t siz) {
-  siz = ALIGN_UP(siz, sizeof(void*));
+  siz = ALIGN_UP(siz, sizeof(void *));
 
   size_t total = siz + sizeof(struct alloc_hdr);
-  int ord = size2ord(total);
+  int    ord   = size2ord(total);
 
   used_mem += ord_siz(ord);
 
@@ -268,7 +268,7 @@ static void *km_alloc(struct alloc *a, size_t siz) {
     return NULL;
 
   struct block *bl = a->free[cur];
-  a->free[cur] = bl->next;
+  a->free[cur]     = bl->next;
 
   while (cur > ord) {
     cur--;
@@ -281,8 +281,8 @@ static void *km_alloc(struct alloc *a, size_t siz) {
   }
 
   struct alloc_hdr *hdr = (struct alloc_hdr *)bl;
-  hdr->ord = ord;
-  hdr->magic = HDR_MAGIC;
+  hdr->ord              = ord;
+  hdr->magic            = HDR_MAGIC;
 
   return (void *)(hdr + 1);
 }
@@ -292,7 +292,7 @@ static void km_free(struct alloc *a, void *ptr) {
     return;
 
   struct alloc_hdr *h = ((struct alloc_hdr *)ptr) - 1;
-  if(h->magic != HDR_MAGIC) {
+  if (h->magic != HDR_MAGIC) {
     printkf("free %p doesn't have proper magic! (%04x)\n", ptr, h->magic);
     return;
   }
@@ -333,14 +333,18 @@ static void km_free(struct alloc *a, void *ptr) {
 static struct alloc kalloc;
 
 void kmalloc_init() {
-  void *mem = (void *)EXT_MEM_BASE;
+  void  *mem = (void *)EXT_MEM_BASE;
   size_t siz = EXT_MEM_SIZ;
   km_init(&kalloc, mem, siz);
 }
 
+#if !ALLOC_EXTRALOG
 void *malloc(size_t siz) { // todo: low-address priority allocation
+#else
+void *malloc_log(size_t siz) {
+#endif
   void *ptr = km_alloc(&kalloc, siz);
-  printgf("malloc at %x siz %d (%d)\n", ptr, ord_siz(size2ord(siz)), siz);
+  printgf("malloc at %x siz %d (%d)\n", ptr, ord_siz(size2ord(siz + sizeof(struct alloc_hdr))), siz);
   return ptr;
 }
 
@@ -349,20 +353,22 @@ void free(void *ptr) {
 }
 
 void *malloc_align(size_t siz, size_t align) {
-  if((align & (align - 1)) != 0) return NULL;
+  if ((align & (align - 1)) != 0)
+    return NULL;
 
   void *raw = malloc(siz + align - 1 + sizeof(void *));
-  if(!raw) return NULL;
+  if (!raw)
+    return NULL;
 
   uintptr_t rawaddr = (uintptr_t)raw + sizeof(void *);
-  uintptr_t a_addr = (rawaddr + align - 1) & ~(align - 1);
+  uintptr_t a_addr  = (rawaddr + align - 1) & ~(align - 1);
 
   ((void **)a_addr)[-1] = raw;
-  return (void*)a_addr;
+  return (void *)a_addr;
 }
 
 void free_align(void *ptr) {
-  void *raw = ((void**)ptr)[-1];
+  void *raw = ((void **)ptr)[-1];
   free(raw);
 }
 

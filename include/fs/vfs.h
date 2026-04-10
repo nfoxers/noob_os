@@ -12,10 +12,14 @@
 #define INODE_SYMLINK  0x0020
 #define INODE_MNTPOINT 0x0040
 
-#define F_RDONLY 0x0001
-#define F_WRONLY 0x0002 // i'll just implement them later man
-#define F_USED   0x0004
-#define F_ADDR   0x0008
+#define F_USED 0x1000
+#define F_ADDR 0x0008
+
+#define O_RDONLY               0x0001
+#define O_WRONLY               0x0002
+#define O_RDWR                 0x0004
+#define O_CREAT                0x0008
+#define O_JUSTGIVEMETHEADDRESS 0x0010
 
 #define PRM_USR 0100
 #define PRM_GRP 0010
@@ -24,6 +28,19 @@
 #define PRM_R 04
 #define PRM_W 02
 #define PRM_X 01
+
+#define S_IRWXU 00700 // user(file owner) has read, write, and execute permission
+#define S_IRUSR 00400 // user has read permission
+#define S_IWUSR 00200 // user has write permission
+#define S_IXUSR 00100 // user has execute permission
+#define S_IRWXG 00070 // group has all permission
+#define S_IRGRP 00040 // group has read permission
+#define S_IWGRP 00020 // group has write permission
+#define S_IXGRP 00010 // group has execute permission
+#define S_IRWXO 00007 // others have all permission
+#define S_IROTH 00004 // others have read permission
+#define S_IWOTH 00002 // others have write permission
+#define S_IXOTH 00001 // others have execute permission
 
 #define DT_BLK  0x01 // block
 #define DT_CHR  0x02 // char
@@ -37,7 +54,10 @@
 #define DT_MAXDIR 10
 
 #define DIRENT_MAXSIZ 32
-#define CWD_MAXSIZ    50
+#define CWD_MAXSIZ    64
+
+#define PIPEBUFSIZ    128
+#define P_FREED 1
 
 struct inode;
 struct file;
@@ -50,7 +70,7 @@ typedef uint32_t mode_t;
 typedef struct dirstream {
   uint8_t count;
   uint8_t type;
-  size_t size;
+  size_t  size;
 
   struct inode *in;
 
@@ -78,14 +98,14 @@ struct inode_ops {
 };
 
 struct file_ops {
-  int (*open)(struct inode *in, uint16_t flg);
+  int (*open)(struct inode *in, const char *restrict p, uint16_t flg);
   int (*read)(struct inode *in, void *buf, size_t off, size_t siz);
   int (*write)(struct inode *in, const void *buf, size_t off, size_t siz);
-  int (*close)(struct inode *in);
+  int (*close)(struct inode *in, int fd);
 };
 
 struct inode {
-  uint16_t size;
+  uint32_t size;
   uint16_t cluster0;
   uint16_t type;
   uint16_t permission;
@@ -98,10 +118,23 @@ struct inode {
   struct file_ops  fops;
 };
 
+struct pipe {
+  uint8_t  buf[PIPEBUFSIZ];
+  uint16_t flg;
+  size_t   readpos;
+  size_t   writepos;
+};
+
+union fdata {
+  struct inode *inode;
+  void         *data;
+};
+
 struct file {
   struct inode *inode;
-  uint16_t      position;
-  uint16_t      flags;
+  // union fdata data;
+  size_t   position;
+  uint16_t flags;
 };
 
 char *path_canon(const char *cwd, const char *path);
@@ -111,17 +144,20 @@ struct inode *lookup_vfs(const char *path);
 /* syscalls */
 
 ssize_t fsys_read(int fd, void *buf, size_t count);
-DIR *fsys_opendir(const char *path);
-int fsys_closedir(struct inode *in, DIR *d);
-int fsys_open(const char *pathname, int flags);
-int fsys_close(int fd);
-int fsys_chdir(const char *path);
-int fsys_mkdir(const char *pathname, mode_t mode);
-int fsys_unlink(const char *pathname);
+ssize_t fsys_write(int fd, void *buf, size_t count);
+DIR    *fsys_opendir(const char *path);
+int     fsys_closedir(struct inode *in, DIR *d);
+int     fsys_open(const char *pathname, int flags);
+int     fsys_close(int fd);
+int     fsys_chdir(const char *path);
+int     fsys_mkdir(const char *pathname, mode_t mode);
+int     fsys_unlink(const char *pathname);
+int     fsys_pipe(int fd[2]);
 
 void init_rootfs();
 
 /* library functions */
-int lsdir(const char *path);
+int lsdir(const char *path, int flg);
+int findfreefd();
 
 #endif

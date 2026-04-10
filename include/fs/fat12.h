@@ -57,9 +57,6 @@ struct direntry {
 
 void init_fs();
 
-#define O_CREAT                0x0001
-#define O_JUSTGIVEMETHEADDRESS 0x0002
-
 #define ROOT_ADDR (struct direntry*)0x8600
 
 #endif
