@@ -6,147 +6,132 @@
 #include "video/printf.h"
 #include <stddef.h>
 #include <stdint.h>
+#include "fs/devfs.h"
 
-#define NFILES 10
+#define MAXMAJ 5
+#define MAXMIN 2
 
-struct inode *lookup_dev(struct inode *dir, const char *name);
+#define NODEVFS (MAXMAJ * MAXMIN)
 
-DIR *opendir_dev(struct inode *dir);
-int  closedir_dev(struct inode *dir, DIR *d);
-int  create_dev(struct inode *dir, const char *name, uint16_t flg);
-int  unlink_dev(struct inode *dir, const char *name);
-int  open_dev(struct inode *dir, const char *restrict pth, uint16_t flg);
-int  close_dev(struct inode *dir, int fd);
-int  read_dev(struct inode *in, void *buf, size_t off, size_t siz);
-int  write_dev(struct inode *in, const void *buf, size_t off, size_t siz);
+struct device *chrdev_tab[MAXMAJ][MAXMIN];
 
-#define DEV_OPS \
-  { lookup_dev, create_dev, unlink_dev, opendir_dev, closedir_dev }
+struct inode_ops dev_iops;
+struct file_ops dev_fops;
 
-#define DEV_FOPS \
-  { open_dev, read_dev, write_dev, close_dev }
+struct dir_data devfs_root;
 
-struct inode devinode[NFILES] = {
-    {.type = INODE_CHARDEV, .permission = 0666, .ops = DEV_OPS, .fops = DEV_FOPS, .cluster0 = 0},
-    {.type = INODE_CHARDEV, .permission = 0666, .ops = DEV_OPS, .fops = DEV_FOPS, .cluster0 = 1},
-    {.type = INODE_CHARDEV, .permission = 0666, .ops = DEV_OPS, .fops = DEV_FOPS, .cluster0 = 2}};
-
-char *devname[NFILES] = {
-    "null", "zero", "random", NULL};
+void dir_add(struct dir_data *dir, const char *name, struct inode *in) {
+  struct dir_entry *dent = dir->entry;
+  while(dent->flg & DE_USED) dent++;
+  dent->flg = DE_USED;
+  dent->in = in;
+  dir->count++;
+  strcpy(dent->name, name);
+}
 
 struct inode *lookup_dev(struct inode *dir, const char *name) {
-  (void)dir;
-  struct inode *in = malloc(sizeof(struct inode));
-  // printkf("done malloced\n");
-  for (uint32_t i = 0; devname[i] != NULL; i++) {
-    if (!strcmp(name, devname[i])) {
-      memcpy(in, &devinode[i], sizeof(devinode[0]));
+  //printkf("were here! %s\n", name);
+  struct dir_data *data = dir->pdata;
+  if(!data) return NULL;
+
+  for(int i = 0; i < data->count; i++) {
+    //printkf("%s vs %s\n", name, data->entry[i].name);
+    if(!strcmp(name, data->entry[i].name)) {
+      struct inode *in = malloc(sizeof(*in));
+      memcpy(in, data->entry[i].in, sizeof(*in));
       return in;
     }
   }
   return NULL;
 }
 
-DIR *opendir_dev(struct inode *dir) {
-  (void)dir;
-  int i = 0;
-  while (*(devname + i))
-    i++;
-  int j = i;
+int register_dev(uint16_t maj, uint16_t min, struct device *dev) {
+  if(chrdev_tab[maj][min]) return -1;
+  chrdev_tab[maj][min] = dev;
+  return 0;
+}
 
-  DIR *d = malloc(sizeof(DIR) * i);
-  i--;
-  while (i + 1) {
-    DIR k = {j, INODE_CHARDEV, 0, &devinode[i], {0}};
-    strcpy(k.data, devname[i]);
-    memcpy(&d[i], &k, sizeof(DIR));
-    i--;
+struct inode *creat_devfs(const char *name, uint16_t maj, uint16_t min) {
+  struct inode *in = malloc(sizeof(struct inode));
+
+  in->type = INODE_CHARDEV;
+  in->fops = &dev_fops;
+
+  struct devidx *didx = malloc(sizeof(struct devidx));
+  didx->maj = maj;
+  didx->min = min;
+
+  in->pdata = didx;
+  dir_add(&devfs_root, name, in);
+  return in;
+}
+
+struct device *getdev(struct inode *in) {
+  struct devidx *d = in->pdata;
+  return chrdev_tab[d->maj][d->min];
+}
+
+/* devfs ops */
+
+ssize_t read_devfs(struct file *f, void *buf, size_t count) {
+  struct device *d = getdev(f->inode);
+  if(!d || !d->ops.read) return -ENOSYS;
+  return d->ops.read(d, buf, count);
+}
+
+ssize_t write_devfs(struct file *f, const void *buf, size_t count) {
+  struct device *d = getdev(f->inode);
+  if(!d || !d->ops.read) return -ENOSYS;
+  return d->ops.write(d, buf, count);
+}
+
+int open_devfs(struct inode *in, struct file *f) {
+  struct device *d = getdev(in);
+  if(d && d->ops.open) {
+    return d->ops.open(in, f);
+  }
+  return 0;
+}
+
+int close_devfs(struct file *f) {
+  struct device *d = getdev(f->inode);
+  if(d && d->ops.close) {
+    return d->ops.close(f);
+  }
+  return 0;
+}
+
+DIR *opendir_devfs(struct inode *dir) {
+  (void)dir;
+
+  struct dir_data *data = dir->pdata;
+
+  DIR *d = malloc(sizeof(DIR) * NODEVFS);
+  for(int i = 0; i < data->count && i < NODEVFS; i++) {
+    strcpy(d[i].data, data->entry[i].name);
+    d[i].in = data->entry[i].in;
+    d[i].type = data->entry[i].in->type;
+    d[i].count = data->count;
+    d[i].size = data->entry[i].in->size;
   }
 
   return d;
 }
 
-int closedir_dev(struct inode *dir, DIR *d) {
+int closedir_devfs(struct inode *dir, DIR *d) {
   free(d);
   (void)dir;
   return 0;
 }
 
-int create_dev(struct inode *dir, const char *name, uint16_t flg) {
-  (void)dir;
-  (void)name;
-  (void)flg;
-  return -EPERM;
-}
+struct inode_ops dev_iops = {
+  .lookup = lookup_dev,
+  .opendir = opendir_devfs,
+  .closedir = closedir_devfs
+};
 
-int unlink_dev(struct inode *dir, const char *name) {
-  (void)dir;
-  (void)name;
-  return -EPERM;
-}
-
-int open_dev(struct inode *dir, const char *restrict pth, uint16_t flg) {
-  struct inode *in = lookup_dev(dir, pth);
-  if (!in)
-    return -ENOENT;
-
-  if (in->type & INODE_DIR) {
-    free(in);
-    return -EISDIR;
-  }
-
-  int fd = findfreefd();
-  if(fd == -1) {
-    free(in);
-    return -ENFILE;
-  }
-
-  p_curproc->p_user->u_ofile[fd] = malloc(sizeof(struct file));
-
-  p_curproc->p_user->u_ofile[fd]->flags = flg | F_USED;
-  p_curproc->p_user->u_ofile[fd]->position = 0;
-  p_curproc->p_user->u_ofile[fd]->inode = in;
-
-  return fd;
-}
-
-int close_dev(struct inode *dir, int fd) {
-  (void)dir;
-  struct file *f = p_curproc->p_user->u_ofile[fd];
-
-  if(!f) return -EBADF;
-  if(!(f->inode)) return -EBADF;
-  if(!(f->flags & F_USED)) return -EBADF;
-
-  free(f->inode);
-  free(f);
-  return 0;
-}
-
-int read_dev(struct inode *in, void *buf, size_t off, size_t siz) {
-  (void)off;
-  if (in->cluster0 == 0) { // null read
-    memset(buf, 0x04, siz);
-    return siz;
-  }
-
-  if (in->cluster0 == 1) { // zero read
-    memset(buf, 0x00, siz);
-    return siz;
-  }
-
-  if (in->cluster0 == 2) { // random read
-    memcpy(buf, (void *)0x7c00, siz);
-    return siz;
-  }
-
-  return 0;
-}
-
-int write_dev(struct inode *in, const void *buf, size_t off, size_t siz) {
-  (void)in;
-  (void)buf;
-  (void)off;
-  (void)siz;
-  return 0;
-}
+struct file_ops dev_fops = {
+  .open = open_devfs,
+  .read = read_devfs,
+  .write = write_devfs
+};

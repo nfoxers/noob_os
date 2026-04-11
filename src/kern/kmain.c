@@ -1,6 +1,7 @@
 #include "cpu/ccpu.h"
 #include "cpu/gdt.h"
 #include "cpu/idt.h"
+#include "driver/tty.h"
 #include "fs/fat12.h"
 #include "driver/keyboard.h"
 #include "driver/pci.h"
@@ -47,6 +48,8 @@ void setup() {
   smbios_scan();
 
   page_init();
+
+  tty_init();
   init_kbd();
  
 
@@ -55,7 +58,7 @@ void setup() {
   printk("time of boot: ");  
   print_time();
 
-  printkf("used dynamic memory: %d K\n", getused()/1024);
+  printkf("used dynamic memory: %d KiB (%d B)\n", getused()/1024, getused());
 }
 
 void kmain(void) {

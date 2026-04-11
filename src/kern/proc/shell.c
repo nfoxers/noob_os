@@ -336,7 +336,7 @@ void shell() {
   while (1) {
     printkf("root@root:%s$ ", p_curproc->p_user->u_cdirname);
     int rd = kgets(buf, sizeof buf);
-    putchr('\n');
+    //putchr('\n');
 
     if (rd == 0) {
       continue;

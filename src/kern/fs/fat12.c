@@ -64,7 +64,7 @@ void init_fs() {
 
   memcpy(&p_curproc->p_user->u_cdir, &root_dir, sizeof(struct inode));
 
-  for(int i = 0; i < NOFILE; i++) {
+  for (int i = 0; i < NOFILE; i++) {
     ofile[i] = 0;
   }
 }
@@ -147,8 +147,10 @@ void fat2normal(const char *fname, const char *ext, char *buf) {
   *buf = 0;
 }
 
-
 /* forward declarations */
+
+struct file_ops  fat_fops;
+struct inode_ops fat_iops;
 
 int fat_read(struct inode *in, void *buf, size_t off, size_t count);
 
@@ -221,7 +223,7 @@ int create_fat(struct inode *dir, const char *name, uint16_t flg) {
 
 int unlink_fat(struct inode *dir, const char *name) {
   struct inode buf;
-  if(fat_lookup_from(name, dir, &buf)) {
+  if (fat_lookup_from(name, dir, &buf)) {
     return -ENOENT;
   }
 
@@ -230,74 +232,42 @@ int unlink_fat(struct inode *dir, const char *name) {
   return 0;
 }
 
-int open_fat(struct inode *dir, const char *restrict pth, uint16_t flg) {
-  (void)dir; (void)flg;
+int open_fat(struct inode *dir, struct file *f) {
+  (void)dir;
+  (void)f;
 
-  int fd = findfreefd();
-
-  struct inode *buf = malloc(sizeof(struct inode));
-  if(fat_lookup_from(pth, dir, buf)) {
-    // todo: O_CREAT
-    free(buf);
-    return -ENOENT;
-  }
-
-  ofile[fd] = malloc(sizeof(struct file));
-
-  ofile[fd]->flags = flg | F_USED;
-  ofile[fd]->position = 0;
-  ofile[fd]->inode = buf;
-
-  return 0;
+  return -ENOSYS;
 }
 
-int close_fat(struct inode *in, int fd) {
-  (void)in;
-  
-  if(!ofile[fd]) return -EBADF;
-  if(!(ofile[fd]->flags & F_USED)) return -EBADF;
-  if(fd >= NOFILE) return -EBADF;
-  if(!ofile[fd]->inode) return -EBADF;
+int close_fat(struct file *f) {
+  (void)f;
 
-  ofile[fd]->flags &= ~F_USED;
-  ofile[fd]->position = 0;
-  free(ofile[fd]->inode);
-  free(ofile[fd]);
-
-  return 0;
+  return -ENOSYS;
 }
 
-int read_fat(struct inode *in, void *buf, size_t off, size_t siz) {
-  (void)in;
+int read_fat(struct file *f, void *buf, size_t siz) {
+  (void)f;
   (void)buf;
-  (void)off;
   (void)siz;
 
-  if(!(in->permission & S_IRUSR)) return -EPERM;
-  size_t ret = fat_read(in, buf, off, siz);
+  if (!(f->inode->permission & S_IRUSR))
+    return -EPERM;
+  size_t ret = fat_read(f->inode, buf, f->position, siz);
+  f->position += ret;
 
   return ret;
 }
 
-int write_fat(struct inode *in, const void *buf, size_t off, size_t siz) {
-  (void)in;
+int write_fat(struct file *f, const void *buf, size_t siz) {
+  (void)f;
   (void)buf;
-  (void)off;
   (void)siz;
   return -ENOSYS;
 }
 
-void set_vfs(struct inode *in) {
-  in->ops.lookup   = finddir_fat;
-  in->ops.opendir  = opendir_fat;
-  in->ops.closedir = closedir_fat;
-  in->ops.creat    = create_fat;
-  in->ops.unlink   = unlink_fat;
-
-  in->fops.open = open_fat;
-  in->fops.close = close_fat;
-  in->fops.read = read_fat;
-  in->fops.write = write_fat;
+inline void set_vfs(struct inode *in) {
+  in->ops = &fat_iops;
+  in->fops = &fat_fops;
 }
 
 int fat_lookup_from(const char *restrict path, const struct inode *restrict from, struct inode *restrict buf) {
@@ -316,20 +286,23 @@ int fat_lookup_from(const char *restrict path, const struct inode *restrict from
     dr      = fsinfo.root_addr;
   }
 
+      //printkf("cl: %d\n", cluster);
+
   while (tok) {
     found = 0;
 
     if (cluster == 0) {
+      //printkf("en: %p\n", from->entaddr);
       dr      = get_addr(from->entaddr->low_cluster);
       entries = 32;
     } else if (cluster == 0x7fffff00) {
       // dr      = get_addr(from->entaddr->low_cluster);
       entries = 32;
     } else {
-      dr      = (struct direntry *)((cluster - 2) * 1024 + fsinfo.data_addr);
+      dr      = get_addr(cluster);
       entries = 1024 / sizeof(struct direntry);
     }
-
+    //printkf("cl: %d\n", cluster);
     // printkf("der: %p\n", dr - 0x7c00);
     for (int i = 0; i < entries; i++) {
       if (dr[i].fname[0] == 0x00)
@@ -347,6 +320,7 @@ int fat_lookup_from(const char *restrict path, const struct inode *restrict from
 
         buf->cluster0 = dr[i].low_cluster;
         buf->entaddr  = &dr[i];
+        //printkf("ent: %p\n", buf->entaddr);
         buf->size     = dr[i].size;
 
         set_perms(buf, dr[i].fatt);
@@ -368,18 +342,28 @@ int fat_lookup_from(const char *restrict path, const struct inode *restrict from
   return 0;
 }
 
+struct inode_ops fat_iops = {
+  .opendir = opendir_fat,
+  .closedir = closedir_fat,
+  .lookup = finddir_fat,
+  .unlink = unlink_fat
+};
 
-
+struct file_ops fat_fops = {
+    .open  = 0,
+    .close = 0,
+    .read  = read_fat,
+    .write = write_fat};
 
 /* inner filesystem */
 
 uint16_t fattab_read(uint16_t cluster) {
-  uint8_t *fat        = (uint8_t*)(uintptr_t)fsinfo.fat_addr;
+  uint8_t *fat        = (uint8_t *)(uintptr_t)fsinfo.fat_addr;
   uint16_t fat_offset = cluster + (cluster / 2);
   uint16_t ent_offset = fat_offset % 1024;
 
   uint16_t val = *(uint16_t *)&fat[ent_offset];
-  if(val != *(uint16_t *)&fat[ent_offset + 1024]) {
+  if (val != *(uint16_t *)&fat[ent_offset + 1024]) {
     printkf("warn: two fat tables are different at offset %x\n", ent_offset);
   }
 
@@ -389,7 +373,7 @@ uint16_t fattab_read(uint16_t cluster) {
 }
 
 void fattab_write(uint16_t cluster, uint16_t next) {
-  uint8_t *fat        = (uint8_t*)(uintptr_t)fsinfo.fat_addr;
+  uint8_t *fat        = (uint8_t *)(uintptr_t)fsinfo.fat_addr;
   uint16_t fat_offset = cluster + (cluster / 2);
   uint16_t ent_offset = fat_offset % 1024;
 
@@ -408,25 +392,26 @@ void fattab_write(uint16_t cluster, uint16_t next) {
 }
 
 int fat_read(struct inode *in, void *buf, size_t off, size_t count) {
-  if(!in ||!buf) return 0;
+  if (!in || !buf)
+    return 0;
 
   uint16_t cluster = in->entaddr->low_cluster;
-  size_t read = 0;
+  size_t   read    = 0;
 
   cluster = off > 1024 ? fattab_read(cluster) : cluster;
-  off = off % 1024;
+  off     = off % 1024;
 
-  while(cluster < 0xff8) {
+  while (cluster < 0xff8) {
     void *addr = get_addr(cluster);
-    
-    size_t dcount = 1024 - off;
-    dcount = dcount > count ? count : dcount;
 
-    //printkf("dcount: %d\n", dcount);
+    size_t dcount = 1024 - off;
+    dcount        = dcount > count ? count : dcount;
+
+    // printkf("dcount: %d\n", dcount);
 
     memcpy(buf, addr + off, dcount);
 
-    if(dcount > count) {
+    if (dcount > count) {
       printkf("fat read: overflow!\n");
       break;
     }
@@ -434,7 +419,7 @@ int fat_read(struct inode *in, void *buf, size_t off, size_t count) {
     count -= dcount;
     read += dcount;
 
-    off = 0;
+    off     = 0;
     cluster = fattab_read(cluster);
   }
 

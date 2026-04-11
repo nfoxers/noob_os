@@ -5,6 +5,7 @@
 #include "video/printf.h"
 #include "video/video.h"
 #include <stdint.h>
+#include "driver/tty.h"
 
 #define K_SPECIAl 0xe0
 
@@ -64,9 +65,6 @@ uint8_t special_press(uint8_t scan) {
   SP(K_S_PGUP);
   return 0;
 }
-
-static int k_stdin  = 0;
-static int k_stdout = 1;
 
 uint8_t parse_char(uint8_t scan) {
   if (scan == K_SPECIAl) {
@@ -141,7 +139,7 @@ static void kbd_handler(struct regs *r) {
     // uint8_t next = (head + 1) % K_BUFSIZ;
     // kbd_buffer[head] = ch;
     // head = next;
-    if (write(k_stdout, &ch, 1) == -1) {
+    if (write(stdout, &ch, 1) == -1) {
       perror("kbd: write");
     }
   }
@@ -179,14 +177,6 @@ void init_ps2() {
 
 int init_kbd() {
 
-  int fd[2];
-  if (pipe(fd) == -1) {
-    print_init("kbd", "initializing the keyboard...", 1);
-    return 1;
-  }
-
-  k_stdout = fd[1];
-  k_stdin  = fd[0];
 
   init_ps2();
   register_irq(kbd_handler, 1);
@@ -210,12 +200,14 @@ uint8_t getch() {
   int c = 0;
   int r;
 retry:
-  r = read(k_stdin, &c, 1);
+  r = read(stdin, &c, 1);
   if (r == -1) {
     if (errno == EAGAIN) {
+      //while(1);
       goto retry;
     }
     perror("read");
+    while(1);
   }
 
   return c;
@@ -235,6 +227,7 @@ int kgets(char *s, uint16_t siz) {
       idx--;
     }
   }
+  putchr('\n');
   s[idx] = 0;
   return idx;
 }

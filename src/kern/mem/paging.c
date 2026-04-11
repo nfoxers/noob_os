@@ -22,6 +22,15 @@ uint32_t *pagedir;
 extern void switch_pd(uint32_t *pd);
 extern void flush_pg();
 
+void page_fault_hand(struct regs *r) {
+  printkf("\n\nPAGE FAULT! (eip %p)\n", r->eip);
+  printkf("err: %x\n", r->err_code);
+  uint32_t cr2;
+  asm volatile("mov %%cr2, %[o]" : [o]"=r" (cr2) :: "eax");
+  printkf("cr2: %x\n", cr2);
+  while(1);
+}
+
 void page_init() {
   CLI;
   print_init("mem", "initializing pages...", 0);
@@ -39,6 +48,8 @@ void page_init() {
 
   *pagedir = (uint32_t)pagetab | PDIR_ATTR;
   switch_pd(pagedir);
+
+  register_ex(page_fault_hand, 14);
 
   STI;
 }

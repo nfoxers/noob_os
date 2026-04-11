@@ -2,6 +2,7 @@
 #define PROC_H
 
 #include "cpu/idt.h"
+#include "lib/list.h"
 #include "stdint.h"
 
 #include "fs/vfs.h"
@@ -45,14 +46,22 @@ struct proc {
   uint32_t p_addr;
   uint32_t p_size;
 
-  struct proc *p_next;
-  struct proc *p_prev;
+  struct list_head p_runn; // run node
+  struct list_head p_waitn; // wait node
 
   volatile struct context con;
   volatile struct regs *volatile p_frame;
 
   struct user *p_user;
   void        *p_args;
+};
+
+struct wait_queue {
+  struct list_head head;
+};
+
+struct run_queue {
+  struct list_head head;
 };
 
 extern struct proc *volatile p_curproc;
@@ -64,7 +73,6 @@ void schedule();
 struct proc *alloc_proc(void (*f)(), uint16_t cs, void *args);
 
 void init_root_proc();
-void rq_add(struct proc *p);
 
 void spawn_proc(void (*f)(), uint16_t cs, void *args);
 void exit_cur();

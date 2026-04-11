@@ -75,64 +75,66 @@ char *path_canon(const char *cwd, const char *path) {
 
 /* vfs internals */
 
-int read_fs(struct inode *in, uint32_t off, size_t siz, uint8_t *b) {
-  if (in && in->fops.read)
-    return in->fops.read(in, b, off, siz);
+int read_fs(struct file *restrict file, size_t siz, uint8_t *restrict b) {
+  if (file->fops && file->fops->read)
+    return file->fops->read(file, b, siz);
   return -ENOSYS;
 }
 
-int write_fs(struct inode *in, uint32_t off, size_t siz, uint8_t *b) {
-  if (in && in->fops.write)
-    return in->fops.write(in, b, off, siz);
+int write_fs(struct file *restrict file, size_t siz, const uint8_t *restrict b) {
+  if (file->fops && file->fops->write)
+    return file->fops->write(file, b, siz);
   return -ENOSYS;
 }
 
-int open_fs(struct inode *restrict in, const char *restrict pth, uint16_t mode) {
-  if (in && in->fops.open)
-    return in->fops.open(in, pth, mode);
+int open_fs(struct inode *restrict in, struct file *restrict file) {
+  if (file->fops && file->fops->open)
+    return file->fops->open(in, file);
   return -ENOSYS;
 }
 
-int close_fs(struct inode *in, int fd) {
-  if (in && in->fops.close)
-    return in->fops.close(in, fd);
+int close_fs(struct file *file) {
+  if (file->fops && file->fops->close)
+    return file->fops->close(file);
   return -ENOSYS;
 }
 
 DIR *opendir_fs(struct inode *in) {
-  if (in && in->ops.opendir) {
-    return in->ops.opendir(in);
+  if (in->ops && in->ops->opendir) {
+    return in->ops->opendir(in);
   }
   return (DIR *)-ENOSYS;
 }
 
 int closedir_fs(struct inode *in, DIR *d) {
-  if (in && in->ops.closedir) {
-    return in->ops.closedir(in, d);
+  if (in->ops && in->ops->closedir) {
+    return in->ops->closedir(in, d);
   }
   return -ENOSYS;
 }
 
 int create_fs(struct inode *in, const char *name, mode_t mode) {
-  if (in && in->ops.creat) {
-    return in->ops.creat(in, name, mode);
+  if (in && in->ops->creat) {
+    return in->ops->creat(in, name, mode);
   }
   return -ENOSYS;
 }
 
 int unlink_fs(struct inode *in, const char *name) {
-  if (in && in->ops.creat) {
-    return in->ops.unlink(in, name);
+  if (in && in->ops->creat) {
+    return in->ops->unlink(in, name);
   }
   return -ENOSYS;
 }
 
-struct inode *lookup_fs(struct inode *in, const char *name) {
-  if ((in->type == INODE_DIR) && in->ops.lookup) {
-    return in->ops.lookup(in, name);
+struct inode *lookup_fs(struct inode *restrict in, const char *restrict name) {
+  if ((in->type == INODE_DIR) && in->ops && in->ops->lookup) {
+    return in->ops->lookup(in, name);
   }
   return NULL;
 }
+
+// vfs abstraction
 
 struct inode *lookup_vfs_i(char *pth) {
   int mdepth = 0;
@@ -154,8 +156,9 @@ struct inode *lookup_vfs_i(char *pth) {
     return in;
   }
 
+  struct inode tmp = rootinode;
   while (tok) {
-    inode = lookup_fs(inode, tok);
+    inode = lookup_fs(&tmp, tok);
 
     if (!inode) {
       printkf("lookup_vfs: file not found\n");
@@ -169,6 +172,8 @@ struct inode *lookup_vfs_i(char *pth) {
       // free(pth);
       return inode;
     }
+
+    memcpy(&tmp, inode, sizeof(tmp));
     free(inode);
 
     tok = strtok_r(NULL, "/", &sv);
@@ -184,10 +189,12 @@ struct inode *lookup_vfs_r(const char *path, char **save) {
   char *pth = path_canon(cwd, path);
   *save     = strdup(pth);
 
-  // printkf("cwd: %s pth: %s ok: %s \n", cwd, path, *save);
-
+  //printkf("cwd: %s pth: %s ok: %s \n", cwd, path, *save);
   struct inode *ret = lookup_vfs_i(pth);
   free(pth);
+  if(!ret) {
+    free(*save);
+  }
   return ret;
 }
 
@@ -236,7 +243,7 @@ struct inode *look_bs(const char *path, char **name, char **tmp) {
   *name   = get_comps(NULL);
   if (!*b)
     b = "/";
-  printkf("b: %s &%x, name: %s (%x)\n", b, b, *name, **name);
+  //printkf("b: %s &%x, name: %s (%x)\n", b, b, *name, **name);
 
   struct inode *ret = lookup_vfs_i(b);
   if (!ret) {
@@ -256,6 +263,8 @@ ssize_t fsys_read(int fd, void *buf, size_t count) {
 
   struct file *f = p_curproc->p_user->u_ofile[fd];
 
+  //printkf("f: %x\n", f->fops);
+
   if (!f)
     return -EBADF;
   if (!(f->flags & F_USED))
@@ -268,8 +277,7 @@ ssize_t fsys_read(int fd, void *buf, size_t count) {
     return -EPERM;
 
   // printkf("fsysread %d\n", f->inode->fops.read);
-  uint32_t read = read_fs(f->inode, f->position, count, buf);
-  f->position += read;
+  uint32_t read = read_fs(f, count, buf);
   return read;
 }
 
@@ -290,9 +298,8 @@ ssize_t fsys_write(int fd, void *buf, size_t count) {
   if (f->flags & O_RDONLY)
     return -EPERM;
 
-  // printkf("fsyswrite %d\n", f->inode->fops.read);
-  uint32_t read = write_fs(f->inode, f->position, count, buf);
-  f->position += read;
+  // printkf("fsys %d\n", f->inode->fops.read);
+  uint32_t read = write_fs(f, count, buf);
   return read;
 }
 
@@ -300,37 +307,61 @@ int fsys_open(const char *pathname, int flags) {
   if (!(flags & (O_RDONLY | O_WRONLY | O_RDWR)))
     return -EINVAL;
 
-  char         *tmp = 0;
-  char         *nam = 0;
-  struct inode *in  = look_bs(pathname, &nam, &tmp);
-  if (!in)
-    return -ENOENT;
-  // printkf("in: %x\n", in);
-  if (!(in->type & INODE_DIR)) {
+  struct inode *in = lookup_vfs(pathname);
+  if(!in) return -ENOENT;
+
+  // printkf("in: %p\n", in->fops);
+
+  int fd = findfreefd();
+  if(fd == -1) {
     free(in);
-    free(tmp);
-    return -ENOTDIR;
+    return -ENFILE;
   }
 
-  int ret = open_fs(in, nam, flags);
-  free(in);
-  free(tmp);
-  return ret;
+  struct file *f = malloc(sizeof(struct file));
+  f->inode = in;
+  f->fops = in->fops;
+  f->position = 0;
+  f->flags = flags | F_USED;
+  f->refcont = 1;
+
+  int r = 0;
+  if(f->fops && f->fops->open) {
+
+    if((r = f->fops->open(in, f)) < 0) {
+      free(f);
+      free(in);
+      return r;
+    }
+  }
+
+  p_curproc->p_user->u_ofile[fd] = f;
+
+  return fd;
 }
 
 int fsys_close(int fd) {
   if (fd >= NOFILE)
     return -EBADF;
 
-  struct file *i = p_curproc->p_user->u_ofile[fd];
+  struct file *f = p_curproc->p_user->u_ofile[fd];
 
-  if (!i)
+  if (!f)
     return -EBADF;
-  if (!(i->flags | F_USED))
+  if (!(f->flags | F_USED))
     return -EBADF;
-  if (!i->inode)
-    return -EBADF;
-  return close_fs(i->inode, fd);
+
+  p_curproc->p_user->u_ofile[fd] = NULL;
+
+  f->refcont--;
+
+  if(f->refcont == 0) {
+    if(f->fops && f->fops->close) f->fops->close(f);
+    free(f->inode);
+    free(f);
+  }
+
+  return 0;
 }
 
 int fsys_mkdir(const char *path, mode_t mode) {

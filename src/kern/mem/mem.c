@@ -345,6 +345,7 @@ void *malloc_log(size_t siz) {
 #endif
   void *ptr = km_alloc(&kalloc, siz);
   printgf("malloc at %x siz %d (%d)\n", ptr, ord_siz(size2ord(siz + sizeof(struct alloc_hdr))), siz);
+  memset(ptr, 0, siz);
   return ptr;
 }
 

@@ -1,7 +1,9 @@
 #include "proc/proc.h"
 #include "cpu/gdt.h"
 #include "cpu/idt.h"
+#include "cpu/spinlock.h"
 #include "fs/vfs.h"
+#include "lib/list.h"
 #include "mem/mem.h"
 #include "video/printf.h"
 #include "syscall/syscall.h"
@@ -21,6 +23,8 @@ struct proc *run_head;
 struct inode root_dir;
 
 extern struct file root_fd[NOFILE];
+
+struct run_queue rq;
 
 #define STACKSIZ 512 // this'll be enough
 
@@ -50,7 +54,7 @@ volatile struct proc *find_freeproc() {
   }
   return NULL;
 }
-
+/*
 void rq_add(struct proc *p) {
   if (!run_head) {
     run_head  = p;
@@ -81,25 +85,56 @@ void rq_remove(struct proc *p) {
   p->p_next = NULL;
   p->p_prev = NULL;
 }
+*/
+
+void enqueque_runqueue(struct run_queue *rq, struct proc *p) {
+  list_add_tail(&p->p_runn, &rq->head);
+}
+
+void dequeque_runqueue(struct proc *p) {
+  list_del(&p->p_runn);
+}
+
+struct proc *proc_next(struct run_queue *rq) {
+  struct list_head *node = rq->head.next;
+  return container_of(node, struct proc, p_runn);
+}
+
+void sleep_on(struct wait_queue *q, spinlock_t *lock) {
+  struct proc *p = p_curproc;
+
+  dequeque_runqueue(p);
+  p->p_stat = P_SSLEEP;
+  list_add_tail(&p->p_waitn, &q->head);
+
+  spin_unlock(lock);
+  sched_yield();
+  spin_lock(lock);
+}
+
+void wake_up(struct wait_queue *q) { // todo: wake all
+  struct list_head *n = q->head.next;
+  struct proc *p = container_of(n, struct proc, p_waitn);
+  list_del(&p->p_waitn);
+  p->p_stat = P_SRUN;
+  enqueque_runqueue(&rq, p);
+}
 
 void free_proc(struct proc *p) {
-  rq_remove(p);
+  dequeque_runqueue(p);
   p->p_stat = P_SFREE;
 }
 
 void block(struct proc *p) {
-  rq_remove(p);
+  dequeque_runqueue(p);
   p->p_stat = P_SSLEEP;
 }
 
 void exit_cur() {
-  struct proc *next;
-
-  next = p_curproc->p_next;
-  rq_remove(p_curproc); // this removes p_curproc->p_next
+  dequeque_runqueue(p_curproc); // this removes p_curproc->p_next
 
   p_curproc->p_stat = P_SFREE;
-  p_curproc->p_next = next; // so we deremove p_curproc->p_next
+  p_curproc->p_runn.next = NULL;
 
   dealloc_esp(p_curproc->p_stidx);
   sched_yield();
@@ -149,7 +184,6 @@ struct proc *alloc_proc(void (*f)(), uint16_t cs, void *args) {
 }
 
 struct proc tmp_proc;
-
 static void task_switch(struct proc *next) {
   struct proc *prv;
   prv = (p_curproc == next) ? &tmp_proc : p_curproc;
@@ -174,6 +208,7 @@ static void task_switch(struct proc *next) {
 }
 
 void schedule() {
+  /*
   struct proc *next = NULL;
   if (!run_head)
     return;
@@ -184,20 +219,42 @@ void schedule() {
   } else if (p_curproc == p_curproc->p_next)
     return;
   next = p_curproc->p_next;
+  */
+
+  struct proc *prev = p_curproc;
+  struct proc *next = proc_next(&rq);
+
+  if(next == prev) return;
+
+  if(prev->p_stat == P_SRUN) {
+    enqueque_runqueue(&rq, prev);
+  }
+  dequeque_runqueue(next);
 
   task_switch(next);
+}
+
+void add_proc(struct proc *p) {
+  init_list(&p->p_runn);
+  init_list(&p->p_waitn);
+  
+  p->p_stat = P_SRUN;
+
+  enqueque_runqueue(&rq, p);
 }
 
 void spawn_proc(void (*f)(), uint16_t cs, void *args) {
   CLI; // be advised this only works on kernel mode
   struct proc *p = alloc_proc(f, cs, args);
-  rq_add(p);
+  add_proc(p);
   STI;
 }
 
 void init_root_proc() {
+  init_list(&rq.head);
+
   struct proc *kproc = alloc_proc((void (*)())0x9400, CS_K, NULL);
-  rq_add(kproc);
+  add_proc(kproc);
   p_curproc = kproc;
 
   kproc->p_size = &__text_end__ - &__text_start__;

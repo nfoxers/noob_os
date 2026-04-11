@@ -1,6 +1,7 @@
 #ifndef VFS_H
 #define VFS_H
 
+#include "cpu/spinlock.h"
 #include "stddef.h"
 #include "stdint.h"
 
@@ -98,10 +99,12 @@ struct inode_ops {
 };
 
 struct file_ops {
-  int (*open)(struct inode *in, const char *restrict p, uint16_t flg);
-  int (*read)(struct inode *in, void *buf, size_t off, size_t siz);
-  int (*write)(struct inode *in, const void *buf, size_t off, size_t siz);
-  int (*close)(struct inode *in, int fd);
+  int (*open)(struct inode *in, struct file *file);
+  int (*close)(struct file *file);
+
+  ssize_t (*read)(struct file *file, void *buf, size_t siz);
+  ssize_t (*write)(struct file *file, const void *buf, size_t siz);
+  off_t (*lseek)(struct file *file, off_t off, int whence);
 };
 
 struct inode {
@@ -113,9 +116,10 @@ struct inode {
   uint16_t uid;
   uint16_t gid;
 
+  void *pdata;
   struct direntry *entaddr;
-  struct inode_ops ops;
-  struct file_ops  fops;
+  struct inode_ops *ops;
+  struct file_ops  *fops;
 };
 
 struct pipe {
@@ -123,18 +127,32 @@ struct pipe {
   uint16_t flg;
   size_t   readpos;
   size_t   writepos;
-};
 
-union fdata {
-  struct inode *inode;
-  void         *data;
+  spinlock_t lock;
 };
 
 struct file {
   struct inode *inode;
-  // union fdata data;
+
   size_t   position;
-  uint16_t flags;
+  uint32_t refcont;
+  uint32_t flags;
+
+  void *pdata;
+  struct file_ops *fops;
+};
+
+#define DE_USED 0x0001
+
+struct dir_entry {
+  char name[32];
+  uint16_t flg;
+  struct inode *in;
+};
+
+struct dir_data {
+  struct dir_entry entry[16];
+  int count;
 };
 
 char *path_canon(const char *cwd, const char *path);
