@@ -70,6 +70,8 @@ void putchr(char c) {
       for (int i = bottom; i <= bottom_max; i++)
         vscroll_down();
     }
+  } else if(c == '\r') {
+    cursor -= (cursor % 80);
   } else if (c == '\b') {
     backspace();
   } else if (c == '\e') {

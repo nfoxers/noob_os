@@ -124,6 +124,14 @@ int closedir_devfs(struct inode *dir, DIR *d) {
   return 0;
 }
 
+int ioctl_devfs(struct file *file, int op, void *arg) {
+  struct device *d = getdev(file->inode);
+  if(d && d->ops.ioctl) {
+    return d->ops.ioctl(d, op, arg);
+  }
+  return -ENOSYS;
+}
+
 struct inode_ops dev_iops = {
   .lookup = lookup_dev,
   .opendir = opendir_devfs,
@@ -133,5 +141,29 @@ struct inode_ops dev_iops = {
 struct file_ops dev_fops = {
   .open = open_devfs,
   .read = read_devfs,
-  .write = write_devfs
+  .write = write_devfs,
+  .ioctl = ioctl_devfs
 };
+
+/* syscall abstraction */
+
+int fsys_ioctl(int fd, uint32_t op, void *arg) {
+  if(fd >= NOFILE) return -EBADF;
+  if(!arg) return -EFAULT;
+
+  struct file *f = p_curproc->p_user->u_ofile[fd];
+
+  if (!f)
+    return -EBADF;
+  if (!(f->flags & F_USED))
+    return -EBADF;
+  if (!f->inode)
+    return -EBADF;
+  if (!(f->inode->type & INODE_CHARDEV))
+    return -ENOTTY;
+
+  if(f->fops && f->fops->ioctl) {
+    return f->fops->ioctl(f, op, arg);
+  }
+  return -ENOSYS;
+}

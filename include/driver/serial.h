@@ -1,9 +1,10 @@
 #ifndef SERIAL_H
 #define SERIAL_H
 
-#define COM1 0x3f8 // todo: NOT hardwire this but instead do the bda stuff
-
+#include "driver/tty/uart.h"
 #include "io.h"
+
+#define SRL_BUFSIZ 128
 
 uint32_t init_serial(uint32_t freq);
 

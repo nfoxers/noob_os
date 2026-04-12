@@ -1,6 +1,6 @@
-#include "syscall/syscall.h"
-#include "stddef.h"
 #include "fs/vfs.h"
+#include "stddef.h"
+#include "syscall/syscall.h"
 
 long restart_syscall(void) { // unimplemented
   return syscall(SYS_RSYS);
@@ -15,10 +15,14 @@ pid_t fork() {
 }
 
 ssize_t read(unsigned int fd, void *buf, size_t count) {
+  if (!count)
+    return 0;
   return syscall(SYS_READ, fd, buf, count);
 }
 
 ssize_t write(unsigned int fd, const void *buf, size_t count) {
+  if (!count)
+    return 0;
   return syscall(SYS_WRITE, fd, buf, count);
 }
 
@@ -44,7 +48,7 @@ int chdir(const char *path) { // 12
   return syscall(SYS_CHDIR, path);
 }
 
-int mkdir(const char *pathname, mode_t mode){ // 39
+int mkdir(const char *pathname, mode_t mode) { // 39
   return syscall(SYS_MKDIR, pathname, mode);
 }
 
@@ -53,15 +57,20 @@ int unlink(const char *path) { // 10
 }
 
 DIR *opendir(const char *path) {
-  DIR* ret = (DIR*)syscall(SYS_OPENDIR, path);
-  if((int)ret == -1) return NULL;
+  DIR *ret = (DIR *)syscall(SYS_OPENDIR, path);
+  if ((int)ret == -1)
+    return NULL;
   return ret;
 }
 
 int closedir(struct inode *in, DIR *d) {
   return syscall(SYS_CLOSEDIR, in, d);
-} 
+}
 
 int pipe(int fd[2]) { // 42
   return syscall(SYS_PIPE, fd);
+}
+
+int ioctl(int fd, int op, void *argp) {
+  return syscall(SYS_IOCTL, fd, op, argp);
 }

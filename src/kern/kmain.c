@@ -49,9 +49,8 @@ void setup() {
 
   page_init();
 
-  tty_init();
   init_kbd();
- 
+  init_tty();
 
 
   check_capat();
@@ -72,6 +71,8 @@ void kmain(void) {
   if(close(fd[0]) == -1) perror("close");
   if(close(fd[1]) == -1) perror("close");
 */
+
+  //if(ioctl(0, 0, (void *)1) == -1) perror("ioctl");
   STI;  
   shell();
 

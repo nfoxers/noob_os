@@ -7,6 +7,7 @@
 #include <stdarg.h>
 #include <stdint.h>
 #include <lib/errno.h>
+#include "fs/devfs.h"
 
 /* one little note so i dont forget
   eax: sys nr
@@ -88,11 +89,16 @@ uint32_t sys_pipe(ARGS) {
   return fsys_pipe((int *)a1);
 }
 
+uint32_t sys_ioctl(ARGS) {
+  ARGS_USELESS;
+  return fsys_ioctl(a1, a2, (void *)a3);
+}
+
 /* jump table & handlers */
 
 const syshand systab[NSYS] = {
     0, 0, 0, sys_read, sys_write, sys_open, sys_close, 0, sys_yield, sys_chdir, sys_mkdir,
-  sys_unlink, sys_opendir, sys_closedir, sys_pipe};
+  sys_unlink, sys_opendir, sys_closedir, sys_pipe, sys_ioctl};
 
 void sys_hand(struct regs *r) {
   syshand e = systab[r->eax];

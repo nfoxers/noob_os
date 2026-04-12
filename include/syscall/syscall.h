@@ -22,6 +22,7 @@
 #define SYS_OPENDIR  12
 #define SYS_CLOSEDIR 13
 #define SYS_PIPE     14
+#define SYS_IOCTL    15
 
 void     syscall_init();
 uint32_t syscall(uint32_t nr, ...);
@@ -46,6 +47,7 @@ int chdir(const char *path);
 int mkdir(const char *pathname, mode_t mode);
 int unlink(const char *path);
 int pipe(int fd[2]);
+int ioctl(int fd, int op, void *argp);
 
 // doesnt even exist in linux syscall table
 

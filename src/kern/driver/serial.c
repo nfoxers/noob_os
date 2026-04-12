@@ -1,69 +1,68 @@
 #include "driver/serial.h"
 #include "cpu/idt.h"
+#include "driver/tty.h"
+#include "driver/tty/uart.h"
+#include "fs/devfs.h"
+#include "fs/vfs.h"
 #include "io.h"
 #include "video/printf.h"
 #include "video/video.h"
-
-#define UART_FREQ 115200
-#define SRL_BUFSIZ 128
+#include <mem/mem.h>
 
 static uint32_t sfreq;
 
-volatile uint8_t charbuf[SRL_BUFSIZ];
-static volatile uint16_t head;
-static volatile uint16_t tail;
+struct tty    uartty;
+struct device uartdev;
+
+int uart_rxavail() {
+  return inb(COM1 + UART_LSTAT) & L_DR;
+}
 
 static void serial_isr(struct regs *r) {
   (void)r;
-  uint16_t next = (head + 1) % SRL_BUFSIZ;
-  char c = inb(COM1);
 
-  if(c == 'u') {
-    vscroll_up();
-    goto isr_done;
+  while (uart_rxavail()) {
+    char c = inb(COM1);
+    tty_inputc(&uartty, c);
   }
 
-  if(c == 'v') {
-    vscroll_down();
-    goto isr_done;
-  }
-
-  if(next != tail) {
-    if(c == '\r') c = '\n';
-    charbuf[head] = c;
-    s_putchr(c);
-    head = next;
-  }
-isr_done:
   pic_eoi();
 }
 
 char s_getchr() {
-  while(head == tail);
 
-  char c = charbuf[tail];
-  tail = (tail + 1) % SRL_BUFSIZ;
-  return c;
+  return 0;
 }
 
 void s_putchr(int c) {
-  if(c == '\n') {
-    outb(COM1, '\n');
-    outb(COM1, '\r');
-    return;
-  }
-  if(c == '\b') {
-    outb(COM1, '\b');
-    outb(COM1, ' ');
-    outb(COM1, '\b');
-    return;
-  }
   outb(COM1, c);
 }
 
-uint32_t init_serial(uint32_t freq) {
-  
+ssize_t write_ttyserial(struct tty *tty, const char *buf, size_t count) {
+  (void)tty;
+  for (size_t i = 0; i < count; i++) {
+    s_putchr(buf[i]);
+  }
+  return count;
+}
 
+struct tty_ops stty_ops = {
+    .write = write_ttyserial};
+
+void init_ttys0() {
+  struct tty *tty_tmp = alloc_tty(&stty_ops);
+  memcpy(&uartty, tty_tmp, sizeof(*tty_tmp));
+  free(tty_tmp);
+
+  struct device *dev_tmp = alloc_ttydev(&uartty);
+  memcpy(&uartdev, dev_tmp, sizeof(*dev_tmp));
+  free(dev_tmp);
+
+  register_dev(1, 0, &uartdev);
+  creat_devfs("ttyS0", 1, 0);
+}
+
+void set_baud(uint32_t freq) {
   uint32_t div = UART_FREQ / freq;
   if (div > UINT16_MAX) {
     div   = 0xffff;
@@ -72,28 +71,42 @@ uint32_t init_serial(uint32_t freq) {
 
   sfreq = UART_FREQ / div;
 
-  outb(COM1 + 1, 0x00);
+  uint8_t ints = 0;
+  ints         = inb(COM1 + UART_INT);
 
-  outb(COM1 + 3, 0x80);
-  outb(COM1 + 0, div & 0xff);
-  outb(COM1 + 1, (div >> 8) & 0xff);
+  outb(COM1 + UART_INT, 0x00);
 
-  outb(COM1 + 3, 0x03);
-  outb(COM1 + 2, 0xc7);
-  outb(COM1 + 4, 0x0b);
-  outb(COM1 + 4, 0x1e);
+  uint8_t lctrl = inb(COM1 + UART_LCTRL) & ~LCTRL_DLAB;
+  outb(COM1 + UART_LCTRL, 0x80);
 
-  outb(COM1 + 0, 0xAE);
-  if (inb(COM1 + 0) != 0xAE) {
+  outb(COM1 + UART_DIVLO, div & 0xff);
+  outb(COM1 + UART_DIVHI, (div >> 8) & 0xff);
+
+  outb(COM1 + UART_LCTRL, lctrl);
+  outb(COM1 + UART_INT, ints);
+}
+
+uint32_t init_serial(uint32_t freq) {
+  outb(COM1 + UART_INT, 0x00);
+
+  set_baud(freq);
+
+  outb(COM1 + UART_LCTRL, DATAB8);
+  outb(COM1 + UART_FCTRL, ITLB1 | FIFO_ENABLE | FIFO_RXCLR | FIFO_TXCLR);
+  outb(COM1 + UART_MCTRL, M_OUT2 | M_DTR | M_RTS);
+  outb(COM1 + UART_MCTRL, M_LOOP | M_OUT1 | M_DTR | M_RTS);
+
+  outb(COM1, 0xAE);
+  if (inb(COM1) != 0xAE) {
     print_init("srl", "initializing serial...", 1);
     return 1;
   }
 
-  outb(COM1 + 4, 0x0f);
-  print_info("frq", 2, "baud rate: \e\x09%d baud * hz\e\x0f", UART_FREQ / div);
+  outb(COM1 + UART_MCTRL, M_OUT2 | M_DTR | M_RTS);
+  // print_info("frq", 2, "baud rate: \e\x09%d baud * hz\e\x0f", UART_FREQ / div);
 
-  outb(COM1 + 1, 1);
-  
+  outb(COM1 + UART_INT, INT_RXAVAIL);
+
   register_irq(serial_isr, 4);
 
   pic_cm(4);

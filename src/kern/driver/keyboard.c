@@ -1,11 +1,18 @@
 #include "driver/keyboard.h"
+#include "asm/termbits.h"
+#include "driver/serial.h"
 #include "cpu/idt.h"
-#include "lib/errno.h"
-#include "syscall/syscall.h"
+#include "driver/tty.h"
+#include "driver/tty/uart.h"
+#include "fs/devfs.h"
+#include "fs/vfs.h"
+#include "io.h"
 #include "video/printf.h"
 #include "video/video.h"
-#include <stdint.h>
-#include "driver/tty.h"
+#include <mem/mem.h>
+#include "syscall/syscall.h"
+#include "lib/errno.h"
+
 
 #define K_SPECIAl 0xe0
 
@@ -129,6 +136,10 @@ uint8_t parse_char(uint8_t scan) {
   return scancode_map[scan];
 }
 
+struct tty ctty;
+struct device cdev;
+
+
 static void kbd_handler(struct regs *r) {
   (void)r;
   uint8_t scan = inb(0x60);
@@ -139,12 +150,53 @@ static void kbd_handler(struct regs *r) {
     // uint8_t next = (head + 1) % K_BUFSIZ;
     // kbd_buffer[head] = ch;
     // head = next;
-    if (write(stdout, &ch, 1) == -1) {
-      perror("kbd: write");
-    }
+    tty_inputc(&ctty, ch);
   }
 
   pic_eoi();
+}
+
+ssize_t console_ttywrite(struct tty *t, const char *buf, size_t c) {
+  (void)t;
+  for(size_t i = 0; i < c; i++) {
+    putchr(buf[i]);
+  }
+  return c;
+}
+
+struct tty_ops cttyops = {
+  .write = console_ttywrite
+};
+
+void init_tty() {
+  print_init("tty", "intializing /dev/tty...", 0);
+
+  struct tty *t = alloc_tty(&cttyops);
+  memcpy(&ctty, t, sizeof(*t));
+  free(t);
+
+  ctty.termios.c_lflag &= ~(ECHO | ICANON);
+
+  struct device *d = alloc_ttydev(&ctty);
+  memcpy(&cdev, d, sizeof(*d));
+  free(d);
+
+  register_dev(1, 0, &cdev);
+  creat_devfs("tty", 1, 0);
+  // printkf("stdin: %d\n", stdin);
+
+  stdin = open("/dev/tty", O_RDONLY);
+
+  if (stdin < 0) {
+    perror("tty: open");
+    return;
+  }
+  stdout = open("/dev/tty", O_WRONLY);
+  if (stdout < 0) {
+    close(stdin);
+    perror("tty: open2");
+    return;
+  }
 }
 
 void init_ps2() {
@@ -176,8 +228,6 @@ void init_ps2() {
 }
 
 int init_kbd() {
-
-
   init_ps2();
   register_irq(kbd_handler, 1);
   pic_cm(1);
@@ -186,17 +236,6 @@ int init_kbd() {
 }
 
 uint8_t getch() {
-  /*
-  while (head == tail)
-    ;
-
-  CLI;
-  uint8_t c = kbd_buffer[tail];
-
-  tail = (tail + 1) % K_BUFSIZ;
-  STI;
-  */
-
   int c = 0;
   int r;
 retry:

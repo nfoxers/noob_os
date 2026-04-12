@@ -8,4 +8,6 @@ uint8_t getch();
 
 int kgets(char *s, uint16_t siz);
 
+void init_tty();
+
 #endif

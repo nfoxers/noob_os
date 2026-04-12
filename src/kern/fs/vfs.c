@@ -189,10 +189,10 @@ struct inode *lookup_vfs_r(const char *path, char **save) {
   char *pth = path_canon(cwd, path);
   *save     = strdup(pth);
 
-  //printkf("cwd: %s pth: %s ok: %s \n", cwd, path, *save);
+  // printkf("cwd: %s pth: %s ok: %s \n", cwd, path, *save);
   struct inode *ret = lookup_vfs_i(pth);
   free(pth);
-  if(!ret) {
+  if (!ret) {
     free(*save);
   }
   return ret;
@@ -243,7 +243,7 @@ struct inode *look_bs(const char *path, char **name, char **tmp) {
   *name   = get_comps(NULL);
   if (!*b)
     b = "/";
-  //printkf("b: %s &%x, name: %s (%x)\n", b, b, *name, **name);
+  // printkf("b: %s &%x, name: %s (%x)\n", b, b, *name, **name);
 
   struct inode *ret = lookup_vfs_i(b);
   if (!ret) {
@@ -263,7 +263,7 @@ ssize_t fsys_read(int fd, void *buf, size_t count) {
 
   struct file *f = p_curproc->p_user->u_ofile[fd];
 
-  //printkf("f: %x\n", f->fops);
+  // printkf("f: %x\n", f->fops);
 
   if (!f)
     return -EBADF;
@@ -308,27 +308,28 @@ int fsys_open(const char *pathname, int flags) {
     return -EINVAL;
 
   struct inode *in = lookup_vfs(pathname);
-  if(!in) return -ENOENT;
+  if (!in)
+    return -ENOENT;
 
   // printkf("in: %p\n", in->fops);
 
   int fd = findfreefd();
-  if(fd == -1) {
+  if (fd == -1) {
     free(in);
     return -ENFILE;
   }
 
   struct file *f = malloc(sizeof(struct file));
-  f->inode = in;
-  f->fops = in->fops;
-  f->position = 0;
-  f->flags = flags | F_USED;
-  f->refcont = 1;
+  f->inode       = in;
+  f->fops        = in->fops;
+  f->position    = 0;
+  f->flags       = flags | F_USED;
+  f->refcont     = 1;
 
   int r = 0;
-  if(f->fops && f->fops->open) {
+  if (f->fops && f->fops->open) {
 
-    if((r = f->fops->open(in, f)) < 0) {
+    if ((r = f->fops->open(in, f)) < 0) {
       free(f);
       free(in);
       return r;
@@ -355,8 +356,9 @@ int fsys_close(int fd) {
 
   f->refcont--;
 
-  if(f->refcont == 0) {
-    if(f->fops && f->fops->close) f->fops->close(f);
+  if (f->refcont == 0) {
+    if (f->fops && f->fops->close)
+      f->fops->close(f);
     free(f->inode);
     free(f);
   }

@@ -105,6 +105,8 @@ struct file_ops {
   ssize_t (*read)(struct file *file, void *buf, size_t siz);
   ssize_t (*write)(struct file *file, const void *buf, size_t siz);
   off_t (*lseek)(struct file *file, off_t off, int whence);
+
+  int (*ioctl)(struct file *file, int op, void *arg);
 };
 
 struct inode {
