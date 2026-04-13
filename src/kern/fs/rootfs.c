@@ -1,3 +1,4 @@
+#include "asm/sys/stat.h"
 #include "fs/vfs.h"
 #include "mem/mem.h"
 #include "fs/fat12.h"
@@ -41,7 +42,7 @@ ssize_t read_dev(struct file *file, void *buf, size_t siz);
 ssize_t write_dev(struct file *file, const void *buf, size_t siz);
 
 const char *rootname[] = {
-  "home", "tmp", "bin", "dev"
+  "home", "bin", "etc", "tmp", "var", "dev"
 };
 
 struct inode rootinode;
@@ -62,6 +63,10 @@ extern struct file_ops dev_fops;
 struct inode *lookup_root(struct inode *dir, const char *name) {
   //printkf("rootlok: %s\n", name);
   struct dir_data *data = dir->pdata;
+  if(!data) {
+    printkf("err: zero data\n");
+    return NULL;
+  }
   for(int i = 0; i < data->count; i++) {
     if(!strcmp(name, data->entry[i].name)) {
       struct inode *in = malloc(sizeof(struct inode));
@@ -83,7 +88,7 @@ DIR *opendir_root(struct inode *dir) {
   for(int i = 0; i < data->count && i < NOFS; i++) {
     strcpy(d[i].data, data->entry[i].name);
     d[i].in = data->entry[i].in;
-    d[i].type = data->entry[i].in->type;
+    d[i].type = data->entry[i].in->mode;
     d[i].count = data->count;
     d[i].size = data->entry[i].in->size;
   }
@@ -106,7 +111,7 @@ void init_rootfs() {
   rootinode.fops = &root_fops;
   rootinode.ops = &root_iops;
   rootinode.pdata = &data;
-  rootinode.type = INODE_DIR;
+  rootinode.mode = S_IFDIR;
 
   uint32_t i = 0;
   for(i = 0; i < sizeof(rootname)/sizeof(rootname[0])-1; i++) {
@@ -124,11 +129,12 @@ void init_rootfs() {
 
   devinode.fops = &dev_fops;
   devinode.ops = &dev_iops;
-  devinode.type = INODE_DIR;
+  devinode.ino = 1;
+  devinode.mode = S_IFDIR | 0755;
   devinode.pdata = &devfs_root;
 
-  strcpy(data.entry[3].name, "dev");
-  data.entry[3].in = &devinode;
+  strcpy(data.entry[i].name, "dev");
+  data.entry[i].in = &devinode;
 
   data.count = i + 1;
 

@@ -15,6 +15,8 @@ struct tty;
 
 struct tty_ops {
   ssize_t (*write)(struct tty *tty, const char *buf, size_t count);
+
+  void (*update)(struct tty *tty);
 };
 
 struct tty {
@@ -43,6 +45,6 @@ void tty_outputc(struct tty *t, char c);
 struct tty *alloc_tty(struct tty_ops *ops);
 struct device *alloc_ttydev(struct tty *t);
 
-void tty_init();
+speed_t b2speed(uint32_t baud);
 
 #endif

@@ -4,14 +4,9 @@
 #include "cpu/spinlock.h"
 #include "stddef.h"
 #include "stdint.h"
+#include <asm/sys/types.h>
 
-#define INODE_FILE     0x0001
-#define INODE_DIR      0x0002
-#define INODE_CHARDEV  0x0004
-#define INODE_BLKDEV   0x0008
-#define INODE_PIPE     0x0010
-#define INODE_SYMLINK  0x0020
-#define INODE_MNTPOINT 0x0040
+#include "asm/sys/stat.h"
 
 #define F_USED 0x1000
 #define F_ADDR 0x0008
@@ -21,56 +16,35 @@
 #define O_RDWR                 0x0004
 #define O_CREAT                0x0008
 #define O_JUSTGIVEMETHEADDRESS 0x0010
-
-#define PRM_USR 0100
-#define PRM_GRP 0010
-#define PRM_OTH 0001
-
-#define PRM_R 04
-#define PRM_W 02
-#define PRM_X 01
-
-#define S_IRWXU 00700 // user(file owner) has read, write, and execute permission
-#define S_IRUSR 00400 // user has read permission
-#define S_IWUSR 00200 // user has write permission
-#define S_IXUSR 00100 // user has execute permission
-#define S_IRWXG 00070 // group has all permission
-#define S_IRGRP 00040 // group has read permission
-#define S_IWGRP 00020 // group has write permission
-#define S_IXGRP 00010 // group has execute permission
-#define S_IRWXO 00007 // others have all permission
-#define S_IROTH 00004 // others have read permission
-#define S_IWOTH 00002 // others have write permission
-#define S_IXOTH 00001 // others have execute permission
-
-#define DT_BLK  0x01 // block
-#define DT_CHR  0x02 // char
-#define DT_DIR  0x04 // directory
-#define DT_FIFO 0x08 // named fifo
-#define DT_LNK  0x10 // symlink
-#define DT_REG  0x20 // regular file
-#define DT_SOCK 0x40 // unix sock
-#define DT_UNK  0x80 // unknown
+/*
+#define INODE_FILE     S_IFREG
+#define INODE_DIR      S_IFDIR
+#define INODE_CHARDEV  S_IFCHR
+#define INODE_BLKDEV   S_IFBLK
+#define INODE_PIPE     0
+#define INODE_SYMLINK  0x0020
+#define INODE_MNTPOINT 0x0040
+*/
 
 #define DT_MAXDIR 10
 
 #define DIRENT_MAXSIZ 32
 #define CWD_MAXSIZ    64
 
-#define PIPEBUFSIZ    128
-#define P_FREED 1
+#define PIPEBUFSIZ 128
+#define P_FREED    1
 
 struct inode;
 struct file;
 
-typedef uint32_t off_t;
+// typedef uint32_t off_t;
 typedef int      pid_t;
 typedef int      ssize_t;
 typedef uint32_t mode_t;
 
 typedef struct dirstream {
   uint8_t count;
-  uint8_t type;
+  mode_t  type;
   size_t  size;
 
   struct inode *in;
@@ -78,12 +52,10 @@ typedef struct dirstream {
   char data[DIRENT_MAXSIZ];
 } DIR;
 
-struct dirent {
-  off_t    d_off;
-  uint16_t d_reclen;
-  uint8_t  d_type;
+struct super_block;
+struct inode;
 
-  char d_name[DIRENT_MAXSIZ];
+struct statfs {
 };
 
 // extra comments so i dont waste dynamic memory
@@ -109,19 +81,13 @@ struct file_ops {
   int (*ioctl)(struct file *file, int op, void *arg);
 };
 
-struct inode {
-  uint32_t size;
-  uint16_t cluster0;
-  uint16_t type;
-  uint16_t permission;
-
-  uint16_t uid;
-  uint16_t gid;
-
-  void *pdata;
-  struct direntry *entaddr;
-  struct inode_ops *ops;
-  struct file_ops  *fops;
+struct super_ops {
+  void (*read_inode)(struct inode *);
+  int (*write_inode)(int flags, struct inode *);
+  void (*put_inode)(struct inode *);
+  void (*put_super)(struct super_block *);
+  void (*write_super)(struct super_block *);
+  void (*statfs)(struct super_block *, struct statfs *);
 };
 
 struct pipe {
@@ -133,28 +99,77 @@ struct pipe {
   spinlock_t lock;
 };
 
+struct dentry;
+
+struct mount {
+  struct super_block *sb;
+
+  struct dentry *mntpoint;
+  struct dentry *root;
+  struct mount  *parent;
+  int            ref;
+};
+
+struct dentry {
+  struct inode  *in;
+  struct dentry *parent;
+  const char    *name;
+  struct mount  *mnt;
+};
+
+struct super_block {
+  uint32_t s_blocksize;
+  uint16_t s_sbflags;
+  uint32_t s_magic;
+
+  struct inode     *s_mounted;
+  struct super_ops *s_op;
+
+  void *generic_sbp;
+};
+
+struct inode {
+  mode_t   mode;
+  uint16_t fsflags;
+  uint32_t iflags;
+  size_t   size;
+  uint32_t ino;
+
+  uint16_t uid;
+  uint16_t gid;
+
+  struct super_block *sb;
+  struct direntry    *entaddr;
+  struct inode_ops   *ops;
+  struct file_ops    *fops;
+
+  void *pdata;
+};
+
 struct file {
   struct inode *inode;
 
+  mode_t   mode;
   size_t   position;
   uint32_t refcont;
   uint32_t flags;
 
-  void *pdata;
-  struct file_ops *fops;
+  void              *pdata;
+  struct file_ops   *fops;
+  const struct cred *cred;
 };
 
 #define DE_USED 0x0001
 
 struct dir_entry {
-  char name[32];
-  uint16_t flg;
+  char          name[32];
+  uint16_t      flg;
   struct inode *in;
 };
 
 struct dir_data {
   struct dir_entry entry[16];
-  int count;
+  int              count;
 };
 
 char *path_canon(const char *cwd, const char *path);
@@ -173,6 +188,8 @@ int     fsys_chdir(const char *path);
 int     fsys_mkdir(const char *pathname, mode_t mode);
 int     fsys_unlink(const char *pathname);
 int     fsys_pipe(int fd[2]);
+int     fsys_dup(int oldfd);
+int     fsys_dup2(int oldfd, int newfd);
 
 void init_rootfs();
 

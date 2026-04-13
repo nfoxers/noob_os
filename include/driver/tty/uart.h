@@ -21,7 +21,7 @@
 #define UART_SCRAT 0x07 // scratch
 
 /* line control bit (masks) */
-
+ 
 #define LCTRL_DATA 0x03
 #define LCTRL_STOP 0x04
 #define LCTRL_PART (0x07 << 3)

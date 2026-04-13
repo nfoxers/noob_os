@@ -181,8 +181,7 @@ void init_tty() {
   memcpy(&cdev, d, sizeof(*d));
   free(d);
 
-  register_dev(1, 0, &cdev);
-  creat_devfs("tty", 1, 0);
+  creat_devfs("tty", &cdev, 1, 0);
   // printkf("stdin: %d\n", stdin);
 
   stdin = open("/dev/tty", O_RDONLY);

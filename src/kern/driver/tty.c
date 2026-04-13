@@ -21,10 +21,6 @@ const static cc_t	ttydefchars[NCCS] = {
   CREPRINT, CDISCARD, CERASE, CLNEXT, CEOL
 };
 
-void update_tty(struct device *d) {
-  (void)d;
-}
-
 uint8_t canon_pop(struct tty *t) {
   uint8_t c = t->canonbuf[t->canonr++];
   t->canonr %= TTYBUFSIZ;
@@ -179,7 +175,7 @@ int ioctl_tty(struct device *d, int op, void *arg) {
   struct tty *t = d->pdata;
   if (!t)
     return -EFAULT;
-
+ 
   if(!arg) return -EFAULT;
 
   switch(op) {
@@ -188,7 +184,7 @@ int ioctl_tty(struct device *d, int op, void *arg) {
       return 0;
     case TCSETS:
       memcpy(&((struct tty *)d->pdata)->termios, arg, sizeof(struct termios));
-      update_tty(d);
+      if(t->ops && t->ops->update) t->ops->update(t);
       return 0;
   }
 

@@ -1,3 +1,5 @@
+#include "fs/devfs.h"
+#include "asm/sys/stat.h"
 #include "fs/fat12.h"
 #include "fs/vfs.h"
 #include "lib/errno.h"
@@ -6,7 +8,6 @@
 #include "video/printf.h"
 #include <stddef.h>
 #include <stdint.h>
-#include "fs/devfs.h"
 
 #define MAXMAJ 5
 #define MAXMIN 2
@@ -16,27 +17,27 @@
 struct device *chrdev_tab[MAXMAJ][MAXMIN];
 
 struct inode_ops dev_iops;
-struct file_ops dev_fops;
+struct file_ops  dev_fops;
 
 struct dir_data devfs_root;
 
 void dir_add(struct dir_data *dir, const char *name, struct inode *in) {
   struct dir_entry *dent = dir->entry;
-  while(dent->flg & DE_USED) dent++;
+  while (dent->flg & DE_USED)
+    dent++;
   dent->flg = DE_USED;
-  dent->in = in;
+  dent->in  = in;
   dir->count++;
   strcpy(dent->name, name);
 }
 
 struct inode *lookup_dev(struct inode *dir, const char *name) {
-  //printkf("were here! %s\n", name);
   struct dir_data *data = dir->pdata;
-  if(!data) return NULL;
+  if (!data)
+    return NULL;
 
-  for(int i = 0; i < data->count; i++) {
-    //printkf("%s vs %s\n", name, data->entry[i].name);
-    if(!strcmp(name, data->entry[i].name)) {
+  for (int i = 0; i < data->count; i++) {
+    if (!strcmp(name, data->entry[i].name)) {
       struct inode *in = malloc(sizeof(*in));
       memcpy(in, data->entry[i].in, sizeof(*in));
       return in;
@@ -46,22 +47,28 @@ struct inode *lookup_dev(struct inode *dir, const char *name) {
 }
 
 int register_dev(uint16_t maj, uint16_t min, struct device *dev) {
-  if(chrdev_tab[maj][min]) return -1;
+  if (chrdev_tab[maj][min])
+    return -1;
   chrdev_tab[maj][min] = dev;
   return 0;
 }
 
-struct inode *creat_devfs(const char *name, uint16_t maj, uint16_t min) {
+struct inode *creat_devfs(const char *name, struct device *dev, uint16_t maj, uint16_t min) {
+  register_dev(maj, min, dev);
+
   struct inode *in = malloc(sizeof(struct inode));
 
-  in->type = INODE_CHARDEV;
+  in->mode = S_IFCHR | 0666;
+  in->ino = maj << 16 | min;
+  // sb here...
   in->fops = &dev_fops;
 
   struct devidx *didx = malloc(sizeof(struct devidx));
-  didx->maj = maj;
-  didx->min = min;
+  didx->maj           = maj;
+  didx->min           = min;
 
   in->pdata = didx;
+  dev->idx = didx;
   dir_add(&devfs_root, name, in);
   return in;
 }
@@ -75,19 +82,21 @@ struct device *getdev(struct inode *in) {
 
 ssize_t read_devfs(struct file *f, void *buf, size_t count) {
   struct device *d = getdev(f->inode);
-  if(!d || !d->ops.read) return -ENOSYS;
+  if (!d || !d->ops.read)
+    return -ENOSYS;
   return d->ops.read(d, buf, count);
 }
 
 ssize_t write_devfs(struct file *f, const void *buf, size_t count) {
   struct device *d = getdev(f->inode);
-  if(!d || !d->ops.read) return -ENOSYS;
+  if (!d || !d->ops.read)
+    return -ENOSYS;
   return d->ops.write(d, buf, count);
 }
 
 int open_devfs(struct inode *in, struct file *f) {
   struct device *d = getdev(in);
-  if(d && d->ops.open) {
+  if (d && d->ops.open) {
     return d->ops.open(in, f);
   }
   return 0;
@@ -95,7 +104,7 @@ int open_devfs(struct inode *in, struct file *f) {
 
 int close_devfs(struct file *f) {
   struct device *d = getdev(f->inode);
-  if(d && d->ops.close) {
+  if (d && d->ops.close) {
     return d->ops.close(f);
   }
   return 0;
@@ -107,12 +116,12 @@ DIR *opendir_devfs(struct inode *dir) {
   struct dir_data *data = dir->pdata;
 
   DIR *d = malloc(sizeof(DIR) * NODEVFS);
-  for(int i = 0; i < data->count && i < NODEVFS; i++) {
+  for (int i = 0; i < data->count && i < NODEVFS; i++) {
     strcpy(d[i].data, data->entry[i].name);
-    d[i].in = data->entry[i].in;
-    d[i].type = data->entry[i].in->type;
+    d[i].in    = data->entry[i].in;
+    d[i].type  = data->entry[i].in->mode;
     d[i].count = data->count;
-    d[i].size = data->entry[i].in->size;
+    d[i].size  = data->entry[i].in->size;
   }
 
   return d;
@@ -126,30 +135,30 @@ int closedir_devfs(struct inode *dir, DIR *d) {
 
 int ioctl_devfs(struct file *file, int op, void *arg) {
   struct device *d = getdev(file->inode);
-  if(d && d->ops.ioctl) {
+  if (d && d->ops.ioctl) {
     return d->ops.ioctl(d, op, arg);
   }
   return -ENOSYS;
 }
 
 struct inode_ops dev_iops = {
-  .lookup = lookup_dev,
-  .opendir = opendir_devfs,
-  .closedir = closedir_devfs
-};
+    .lookup   = lookup_dev,
+    .opendir  = opendir_devfs,
+    .closedir = closedir_devfs};
 
 struct file_ops dev_fops = {
-  .open = open_devfs,
-  .read = read_devfs,
-  .write = write_devfs,
-  .ioctl = ioctl_devfs
-};
+    .open  = open_devfs,
+    .read  = read_devfs,
+    .write = write_devfs,
+    .ioctl = ioctl_devfs};
 
 /* syscall abstraction */
 
 int fsys_ioctl(int fd, uint32_t op, void *arg) {
-  if(fd >= NOFILE) return -EBADF;
-  if(!arg) return -EFAULT;
+  if (fd >= NOFILE)
+    return -EBADF;
+  if (!arg)
+    return -EFAULT;
 
   struct file *f = p_curproc->p_user->u_ofile[fd];
 
@@ -159,11 +168,42 @@ int fsys_ioctl(int fd, uint32_t op, void *arg) {
     return -EBADF;
   if (!f->inode)
     return -EBADF;
-  if (!(f->inode->type & INODE_CHARDEV))
+  if (!(S_ISCHR(f->inode->mode)))
     return -ENOTTY;
 
-  if(f->fops && f->fops->ioctl) {
+  if (f->fops && f->fops->ioctl) {
     return f->fops->ioctl(f, op, arg);
   }
   return -ENOSYS;
+}
+
+/* some kind of inits */
+
+ssize_t read_null(struct device *d, void *buf, size_t count) {
+  if(d->idx->min == 0) {
+    return 0;
+  }
+  if(d->idx->min == 1) {
+    memset(buf, 0, count);
+    return count;
+  }
+  return 0;
+}
+
+ssize_t write_null(struct device *d, const void *buf, size_t count) {
+  (void)d;
+  (void)buf;
+  (void)count;
+  return 0;
+}
+
+struct device nulldev = {
+    .name = "null dev",
+    .ops  = {
+         .read = read_null,
+        .write=write_null}};
+
+void init_devs() {
+  creat_devfs("null", &nulldev, 0, 0);
+  creat_devfs("zero", &nulldev, 0, 1);
 }

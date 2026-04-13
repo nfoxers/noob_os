@@ -1,3 +1,4 @@
+#include "asm/sys/stat.h"
 #include "fs/vfs.h"
 #include "mem/mem.h"
 #include "proc/proc.h"
@@ -16,7 +17,7 @@ int read_pipe(struct file *f, void *buf, size_t siz) {
 
   if (siz == 0)
     return 0;
-  if (!(in->type & INODE_PIPE))
+  if (!(S_ISFIFO(in->mode)))
     return -EFAULT;
 
   struct pipe *p = (struct pipe *)f->pdata;
@@ -40,7 +41,7 @@ int write_pipe(struct file *f, const void *buf, size_t siz) {
 
   struct inode *in = f->inode;
 
-  if (!(in->type & INODE_PIPE))
+  if (!(S_ISFIFO(in->mode)))
     return -EFAULT;
 
   struct pipe *p = (struct pipe *)f->pdata;
@@ -74,8 +75,7 @@ void set_pipe(int fd, int r, int rr) {
   f->pdata = p;
   f->flags             = F_USED | (r ? O_RDONLY : O_WRONLY);
   f->inode             = malloc(sizeof(struct inode));
-  f->inode->type       = INODE_PIPE;
-  f->inode->permission = r ? 0400 : 0200;
+  f->inode->mode       = S_IFIFO | (r ? 0400 : 0200);
   memset(f->inode->entaddr, 0, sizeof(struct pipe));
   memcpy(&f->inode->fops, &pipe_fops, sizeof(struct file_ops));
 }

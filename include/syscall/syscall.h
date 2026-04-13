@@ -23,6 +23,8 @@
 #define SYS_CLOSEDIR 13
 #define SYS_PIPE     14
 #define SYS_IOCTL    15
+#define SYS_DUP      16
+#define SYS_DUP2     17
 
 void     syscall_init();
 uint32_t syscall(uint32_t nr, ...);

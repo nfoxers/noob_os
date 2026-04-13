@@ -37,6 +37,9 @@ bin/os.img: build/boot.bin build/kern.bin build/user.bin
 	mmd -i $@ ::tmp
 	mmd -i $@ ::var
 
+	mcopy -i $@ data/passwd ::etc/passwd
+	mcopy -i $@ data/shadow ::etc/shadow
+
 	mcopy -i $@ data/data.txt ::home/data.txt
 	mmd -i $@ ::home/tdir
 	mcopy -i $@ data/data.txt ::home/tdir/data.txt

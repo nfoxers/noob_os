@@ -1,6 +1,7 @@
 #include "mem/mem.h"
 #include "video/printf.h"
 #include <stdint.h>
+#include "lib/ctype.h"
 
 #define BDA_ADDR ((struct bios_da *)0x400)
 
@@ -107,6 +108,14 @@ uint8_t strncmp(const char *s1, const char *s2, size_t siz) {
   return *(uint8_t *)s1 - *(uint8_t *)s2;
 }
 
+char *strchr(const char *s, int c) {
+  while(*s) {
+    if(*s == c) break;
+    s++;
+  }
+  return (char *)s;
+}
+
 char *strrchr(const char *s, int c) {
   const char *l = NULL;
   while (*s) {
@@ -117,6 +126,27 @@ char *strrchr(const char *s, int c) {
   if (!c)
     return (char *)s;
   return (char *)l;
+}
+
+int atoi(const char *str) {
+  int res = 0;
+  int sgn = 1;
+
+  while(isspace(*str)) {
+    str++;
+  }
+
+  if(*str == '+' || *str == '-') {
+    if(*str == '-') sgn = -1;
+    str++;
+  }
+
+  while(isdigit(*str)) {
+    res = res * 10 + (*str - '0');
+    str++;
+  }
+
+  return res * sgn;
 }
 
 size_t strlen(const char *s) {
@@ -164,10 +194,11 @@ struct alloc {
 #endif
 
 struct alloc_hdr {
+  size_t size;
+  uint32_t magic;  
+
   uint8_t  ord;
   uint8_t  pad;
-  uint32_t magic;
-  uint16_t pad2;
 } __attribute__((packed));
 
 static inline size_t ord_siz(uint8_t ord) {
@@ -248,6 +279,8 @@ static void km_init(struct alloc *a, void *mem, size_t siz) {
 }
 
 static size_t used_mem = 0;
+static size_t used_truly = 0;
+static size_t used_max = 0;
 
 static void *km_alloc(struct alloc *a, size_t siz) {
   siz = ALIGN_UP(siz, sizeof(void *));
@@ -256,6 +289,9 @@ static void *km_alloc(struct alloc *a, size_t siz) {
   int    ord   = size2ord(total);
 
   used_mem += ord_siz(ord);
+  used_truly += siz;
+
+  if(used_mem > used_max) used_max = used_mem;
 
   if (ord > MAX_ORD)
     return NULL;
@@ -283,6 +319,7 @@ static void *km_alloc(struct alloc *a, size_t siz) {
   struct alloc_hdr *hdr = (struct alloc_hdr *)bl;
   hdr->ord              = ord;
   hdr->magic            = HDR_MAGIC;
+  hdr->size = siz;
 
   return (void *)(hdr + 1);
 }
@@ -299,6 +336,7 @@ static void km_free(struct alloc *a, void *ptr) {
   int ord = h->ord;
 
   used_mem -= ord_siz(ord);
+  used_truly -= h->size;
 
   printgf("free at %x siz %d\n", ptr, ord_siz(ord));
 
@@ -375,4 +413,12 @@ void free_align(void *ptr) {
 
 size_t getused() {
   return used_mem;
+}
+
+size_t getmaxused() {
+  return used_max;
+}
+
+size_t gettrueused() {
+  return used_truly;
 }

@@ -57,6 +57,4 @@ struct direntry {
 
 void init_fs();
 
-#define ROOT_ADDR (struct direntry*)0x8600
-
 #endif

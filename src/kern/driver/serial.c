@@ -1,4 +1,5 @@
 #include "driver/serial.h"
+#include "asm/termbits.h"
 #include "cpu/idt.h"
 #include "driver/tty.h"
 #include "driver/tty/uart.h"
@@ -46,8 +47,36 @@ ssize_t write_ttyserial(struct tty *tty, const char *buf, size_t count) {
   return count;
 }
 
+void update_serial(struct tty *tty) {
+  struct termios *t = &tty->termios;
+
+  uint8_t siz = t->c_cflag & CSIZE;
+  switch (siz) {
+    case CS5:
+      siz = 0;
+      break;
+    case CS6:
+      siz = 1;
+      break;
+    case CS7:
+      siz = 2;
+      break;
+    case CS8:
+      siz = 3;
+      break;
+  }
+
+  uint8_t n = inb(COM1 + UART_LCTRL);
+  n &= ~3;
+  n |= siz;
+  outb(COM1 + UART_LCTRL, n);
+
+  // todo: things
+}
+
 struct tty_ops stty_ops = {
-    .write = write_ttyserial};
+    .write = write_ttyserial,
+    .update = update_serial};
 
 void init_ttys0() {
   struct tty *tty_tmp = alloc_tty(&stty_ops);
@@ -58,8 +87,8 @@ void init_ttys0() {
   memcpy(&uartdev, dev_tmp, sizeof(*dev_tmp));
   free(dev_tmp);
 
-  register_dev(1, 0, &uartdev);
-  creat_devfs("ttyS0", 1, 0);
+  // register_dev(1, 0, &uartdev);
+  creat_devfs("ttyS0", &uartdev, 1, 1); // dev (1, 0) has been used for the kbd
 }
 
 void set_baud(uint32_t freq) {

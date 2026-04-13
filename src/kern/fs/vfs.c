@@ -1,4 +1,5 @@
 #include "fs/vfs.h"
+#include "asm/sys/stat.h"
 #include "mem/mem.h"
 #include "proc/proc.h"
 #include "syscall/syscall.h"
@@ -128,7 +129,7 @@ int unlink_fs(struct inode *in, const char *name) {
 }
 
 struct inode *lookup_fs(struct inode *restrict in, const char *restrict name) {
-  if ((in->type == INODE_DIR) && in->ops && in->ops->lookup) {
+  if ((S_ISDIR(in->mode)) && in->ops && in->ops->lookup) {
     return in->ops->lookup(in, name);
   }
   return NULL;
@@ -201,7 +202,7 @@ struct inode *lookup_vfs_r(const char *path, char **save) {
 struct inode *lookup_vfs(const char *path) {
   char         *sav;
   struct inode *ret = lookup_vfs_r(path, &sav);
-  free(sav);
+  if(ret) free(sav);
   return ret;
 }
 
@@ -253,6 +254,38 @@ struct inode *look_bs(const char *path, char **name, char **tmp) {
   return ret;
 }
 
+int check_fd(int fd, struct file **f) {
+  if (fd > NOFILE)
+    return -EBADF;
+
+  *f = p_curproc->p_user->u_ofile[fd];
+
+  if (!*f)
+    return -EBADF;
+  if (!((*f)->flags & F_USED))
+    return -EBADF;
+  if (!(*f)->inode)
+    return -EBADF;
+  return 0;
+}
+
+int check_perm(struct file *f, int mask) {
+  const struct cred *c = f->cred;
+  if (c->euid == 0)
+    return 1;
+  struct inode *in = f->inode;
+
+  if(c->euid == in->uid) {
+    return in->mode & (mask * S_IXUSR);
+  }
+
+  if(c->egid == in->gid) {
+    return in->mode & (mask * S_IXGRP);
+  }
+
+  return in->mode & (mask * S_IXOTH);
+}
+
 /* system call abstractions */
 /* these syscals MUST NOT return NULL or zeroes for error. 0 is for ERR_OK (no errors at all!)*/
 // as negatives are handled by the syscall interrupt handler (i.e by changing errno)
@@ -260,6 +293,9 @@ struct inode *look_bs(const char *path, char **name, char **tmp) {
 ssize_t fsys_read(int fd, void *buf, size_t count) {
   if (fd >= NOFILE)
     return -EBADF;
+
+  if (!count)
+    return 0;
 
   struct file *f = p_curproc->p_user->u_ofile[fd];
 
@@ -271,12 +307,15 @@ ssize_t fsys_read(int fd, void *buf, size_t count) {
     return -EBADF;
   if (!f->inode)
     return -EBADF;
-  if (f->inode->type & INODE_DIR)
+  if (S_ISDIR(f->inode->mode))
     return -EISDIR;
   if (f->flags & O_WRONLY)
     return -EPERM;
 
-  // printkf("fsysread %d\n", f->inode->fops.read);
+  int allow = check_perm(f, S_IROTH);
+  if (!allow)
+    return -EPERM;
+
   uint32_t read = read_fs(f, count, buf);
   return read;
 }
@@ -284,6 +323,9 @@ ssize_t fsys_read(int fd, void *buf, size_t count) {
 ssize_t fsys_write(int fd, void *buf, size_t count) {
   if (fd >= NOFILE)
     return -EBADF;
+
+  if (!count)
+    return 0;
 
   struct file *f = p_curproc->p_user->u_ofile[fd];
 
@@ -293,14 +335,16 @@ ssize_t fsys_write(int fd, void *buf, size_t count) {
     return -EBADF;
   if (!f->inode)
     return -EBADF;
-  if (f->inode->type & INODE_DIR)
+  if (S_ISDIR(f->inode->mode))
     return -EISDIR;
   if (f->flags & O_RDONLY)
     return -EPERM;
 
-  // printkf("fsys %d\n", f->inode->fops.read);
-  uint32_t read = write_fs(f, count, buf);
-  return read;
+  int allow = check_perm(f, S_IWOTH);
+  if(!allow) return -EPERM;
+
+  uint32_t write = write_fs(f, count, buf);
+  return write;
 }
 
 int fsys_open(const char *pathname, int flags) {
@@ -320,15 +364,17 @@ int fsys_open(const char *pathname, int flags) {
   }
 
   struct file *f = malloc(sizeof(struct file));
-  f->inode       = in;
-  f->fops        = in->fops;
-  f->position    = 0;
-  f->flags       = flags | F_USED;
-  f->refcont     = 1;
+
+  f->inode    = in;
+  f->fops     = in->fops;
+  f->mode     = in->mode;
+  f->cred     = (const struct cred *)&p_curproc->p_user->cred;
+  f->position = 0;
+  f->flags    = flags | F_USED;
+  f->refcont  = 1;
 
   int r = 0;
   if (f->fops && f->fops->open) {
-
     if ((r = f->fops->open(in, f)) < 0) {
       free(f);
       free(in);
@@ -404,7 +450,7 @@ DIR *fsys_opendir(const char *path) {
   struct inode *in = lookup_vfs(path);
   if (!in)
     return (DIR *)-ENOENT;
-  if (!(in->type & INODE_DIR)) {
+  if (!(S_ISDIR(in->mode))) {
     free(in);
     return (DIR *)-ENOTDIR;
   }
@@ -431,7 +477,7 @@ int fsys_chdir(const char *path) {
     return -ENOENT;
   }
 
-  if (inp->type != INODE_DIR) {
+  if (!S_ISDIR(inp->mode)) {
     printkf("%s: not a directory\n", pth);
 
     free(inp);
@@ -447,10 +493,37 @@ int fsys_chdir(const char *path) {
   return 0;
 }
 
+int fsys_dup2(int oldfd, int newfd) {
+  int          r;
+  struct file *f;
+  if ((r = check_fd(oldfd, &f)) < 0)
+    return r;
+
+  struct file *n;
+  if((r = check_fd(newfd, &n)) >= 0) {
+    // newfd exists
+    close(newfd);
+  }
+
+  f->refcont++;
+  p_curproc->p_user->u_ofile[newfd] = f;
+
+  return newfd;
+}
+
+int fsys_dup(int oldfd) {
+  int newfd = findfreefd();
+  if(newfd == -1) return -ENFILE;
+
+  fsys_dup2(oldfd, newfd);
+
+  return newfd;
+}
+
 /* convenience functions */
 // now these can return whatever they want
 
-char *permget(uint16_t type, uint16_t perm) {
+char *permget(mode_t mode, uint16_t perm) {
 #define SIZ_s 3 * 3 + 1 + 1
   char *s = malloc(SIZ_s);
   memset(s, 0, SIZ_s);
@@ -465,9 +538,9 @@ char *permget(uint16_t type, uint16_t perm) {
       "rw-",
       "rwx"};
 
-  char c = type & INODE_DIR ? 'd' : type & INODE_CHARDEV ? 'c'
-                                : type & INODE_BLKDEV    ? 'b'
-                                                         : '-';
+  char c = S_ISDIR(mode) ? 'd' : S_ISCHR(mode) ? 'c'
+                             : S_ISBLK(mode)   ? 'b'
+                                               : '-';
 
   s[0] = c;
 
@@ -489,7 +562,10 @@ int lsdir(const char *path, int flg) {
 
   if (flg & 1) {
     for (int i = 0; i < d->count; i++) {
-      char *p = permget(d[i].type, d[i].in->permission);
+
+      if(flg & 2) printkf("% 4d ", d[i].in->ino);
+
+      char *p = permget(d[i].in->mode, d[i].in->mode & 0777);
       printkf("%s ", p);
       free(p);
 

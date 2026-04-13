@@ -31,6 +31,11 @@ void check_capat() {
       putchr(' ');
     }
   }
+
+  uint32_t ecx = c_capat.ecx_leaf1;
+  if(ecx & bit_RDRND) {
+    printk("rdrnd");
+  }
   // todo: more leafes
   printk("\e\x0f\n");
 }

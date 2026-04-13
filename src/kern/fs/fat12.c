@@ -1,4 +1,5 @@
 #include "fs/fat12.h"
+#include "asm/sys/stat.h"
 #include "driver/time.h"
 #include "fs/vfs.h"
 #include "mem/mem.h"
@@ -27,6 +28,8 @@ struct fat12info {
 
 struct fat12info fsinfo = {0};
 
+struct super_block g_fat_sb;
+
 extern struct inode root_dir;
 extern struct proc *volatile p_curproc;
 
@@ -54,11 +57,10 @@ void init_fs() {
   fsinfo.data_addr    = fsinfo.data_start * 512 + 0x7c00;
   fsinfo.data_sectors = BS->total_sec - fsinfo.data_start;
 
-  root_dir.type       = INODE_DIR;
-  root_dir.cluster0   = 0;
+  root_dir.ino   = 0;
   root_dir.entaddr    = fsinfo.root_addr;
   root_dir.size       = 0;
-  root_dir.permission = 0766;
+  root_dir.mode = S_IFDIR | 0766;
 
   set_vfs(&root_dir);
 
@@ -105,9 +107,10 @@ int fat_name_match(struct direntry *restrict e, const char *restrict name) {
 }
 
 void set_perms(struct inode *in, uint8_t fatt) {
-  in->permission = 0666;
+  in->mode &= ~0777;
+  in->mode |= 0666;
   if (fatt & FAT_RDONLY)
-    in->permission &= ~(PRM_W * (PRM_USR | PRM_GRP | PRM_OTH));
+    in->mode &= ~(S_IWUSR | S_IWGRP | S_IWOTH);
 }
 
 int fat_lookup_from(const char *restrict path, const struct inode *restrict from, struct inode *restrict buf);
@@ -157,11 +160,10 @@ int fat_read(struct inode *in, void *buf, size_t off, size_t count);
 /* syscall functions */
 
 DIR *opendir_fat(struct inode *in) {
-  if (!in || in->type != INODE_DIR)
+  if (!in || !S_ISDIR(in->mode))
     return NULL;
 
   DIR *d = malloc(sizeof(DIR) * DT_MAXDIR);
-
   struct direntry *dr = in->entaddr == root_dir.entaddr ? root_dir.entaddr : (struct direntry *)get_addr(in->entaddr->low_cluster);
 
   // printkf("entaddr: %x\n", dr);
@@ -174,8 +176,9 @@ DIR *opendir_fat(struct inode *in) {
       continue;
 
     d[i].size = dr->size;
-    // snprintkf(d[i].data, DIRENT_MAXSIZ, "% 8.8s % 3.3s", dr->fname, dr->ext);
-    d[i].type = dr->fatt & FAT_SUBDIR ? INODE_DIR : INODE_FILE;
+    //snprintkf(d[i].data, DIRENT_MAXSIZ, "% 8.8s % 3.3s", dr->fname, dr->ext);
+    d[i].type &= S_IFMT;
+    d[i].type |= dr->fatt & FAT_SUBDIR ? S_IFDIR : S_IFREG;
 
     char buf[20];
     fat2normal(dr->fname, dr->ext, buf);
@@ -232,26 +235,11 @@ int unlink_fat(struct inode *dir, const char *name) {
   return 0;
 }
 
-int open_fat(struct inode *dir, struct file *f) {
-  (void)dir;
-  (void)f;
-
-  return -ENOSYS;
-}
-
-int close_fat(struct file *f) {
-  (void)f;
-
-  return -ENOSYS;
-}
-
 int read_fat(struct file *f, void *buf, size_t siz) {
   (void)f;
   (void)buf;
   (void)siz;
 
-  if (!(f->inode->permission & S_IRUSR))
-    return -EPERM;
   size_t ret = fat_read(f->inode, buf, f->position, siz);
   f->position += ret;
 
@@ -286,24 +274,19 @@ int fat_lookup_from(const char *restrict path, const struct inode *restrict from
     dr      = fsinfo.root_addr;
   }
 
-      //printkf("cl: %d\n", cluster);
-
   while (tok) {
     found = 0;
 
     if (cluster == 0) {
-      //printkf("en: %p\n", from->entaddr);
       dr      = get_addr(from->entaddr->low_cluster);
       entries = 32;
     } else if (cluster == 0x7fffff00) {
-      // dr      = get_addr(from->entaddr->low_cluster);
       entries = 32;
     } else {
       dr      = get_addr(cluster);
       entries = 1024 / sizeof(struct direntry);
     }
-    //printkf("cl: %d\n", cluster);
-    // printkf("der: %p\n", dr - 0x7c00);
+
     for (int i = 0; i < entries; i++) {
       if (dr[i].fname[0] == 0x00)
         break;
@@ -311,17 +294,20 @@ int fat_lookup_from(const char *restrict path, const struct inode *restrict from
         continue;
       if (fat_name_match(&dr[i], tok)) {
         found++;
+        buf->mode &= ~S_IFMT;
         if (dr[i].fatt & FAT_SUBDIR) {
           cluster   = dr[i].low_cluster;
-          buf->type = INODE_DIR;
+          buf->mode |= S_IFDIR;
         } else {
-          buf->type = INODE_FILE;
+          buf->mode |= S_IFREG;
         }
 
-        buf->cluster0 = dr[i].low_cluster;
+        buf->ino = dr[i].low_cluster;
         buf->entaddr  = &dr[i];
         //printkf("ent: %p\n", buf->entaddr);
         buf->size     = dr[i].size;
+        buf->sb = &g_fat_sb;
+        buf->fsflags = dr[i].fatt;
 
         set_perms(buf, dr[i].fatt);
         set_vfs(buf);

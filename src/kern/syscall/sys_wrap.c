@@ -74,3 +74,11 @@ int pipe(int fd[2]) { // 42
 int ioctl(int fd, int op, void *argp) {
   return syscall(SYS_IOCTL, fd, op, argp);
 }
+
+int dup(int oldfd) {
+  return syscall(SYS_DUP, oldfd);
+}
+
+int dup2(int oldfd, int newfd) {
+  return syscall(SYS_DUP2, oldfd, newfd);
+}

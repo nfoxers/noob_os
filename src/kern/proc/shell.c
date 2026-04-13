@@ -120,10 +120,10 @@ int c_ls(char **argv, int argc) {
   if (*pth == '-') {
     if (*(pth + 1) == 'l') {
       if (argc == 2) {
-        return lsdir(".", 1);
+        return lsdir(".", 3);
       } else {
         pth = argv[2];
-        return lsdir(pth, 1);
+        return lsdir(pth, 3);
       }
 
     } else
@@ -224,22 +224,24 @@ int c_cat(char **argv, int argc) {
   if (fd == -1) {
     perror("cat: open");
     return 1;
-}
+  }
 
   uint8_t *buf = malloc(1024);
 
-  //printkf("fd: %d\n\n", fd);
+  // printkf("fd: %d\n\n", fd);
 
-  if(read(fd, (char *)buf, 1024) == -1) {
+  if (read(fd, (char *)buf, 1024) == -1) {
     perror("cat: read");
-    if(close(fd) == -1) perror("cat: close");
+    if (close(fd) == -1)
+      perror("cat: close");
     free(buf);
     return 1;
   }
 
-  printkf("%.1024s\n", buf);
+  printkf("%.1024s", buf);
 
-  if(close(fd) == -1) perror("cat: close2");
+  if (close(fd) == -1)
+    perror("cat: close2");
   free(buf);
   return 0;
 }
@@ -270,6 +272,8 @@ int c_h(char **argv, int argc) {
 int c_mused(char **argv, int argc) {
   ARGS_USELESS;
   printkf("used dynamic memory: %dB\n", getused());
+  printkf("used dynamic memory max: %dB\n", getmaxused());
+  printkf("used dynamic memory eff: %dB\n", gettrueused());
   return 0;
 }
 
@@ -336,7 +340,7 @@ void shell() {
   while (1) {
     printkf("root@root:%s$ ", p_curproc->p_user->u_cdirname);
     int rd = kgets(buf, sizeof buf);
-    //putchr('\n');
+    // putchr('\n');
 
     if (rd == 0) {
       continue;

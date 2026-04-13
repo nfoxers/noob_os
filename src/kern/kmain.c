@@ -2,6 +2,7 @@
 #include "cpu/gdt.h"
 #include "cpu/idt.h"
 #include "driver/tty.h"
+#include "fs/devfs.h"
 #include "fs/fat12.h"
 #include "driver/keyboard.h"
 #include "driver/pci.h"
@@ -49,6 +50,7 @@ void setup() {
 
   page_init();
 
+  init_devs();
   init_kbd();
   init_tty();
 
@@ -63,16 +65,10 @@ void setup() {
 void kmain(void) {
   setup();
 
-  // TODO: fork and execve
-  /*
-  int fd[2];
-  if(pipe(fd) == -1) perror("pipe");
-  printkf("fd: %d %d\n", fd[0], fd[1]);
-  if(close(fd[0]) == -1) perror("close");
-  if(close(fd[1]) == -1) perror("close");
-*/
+  printkf("stat for root: %d\n", chkcred("user", "toor"));
 
-  //if(ioctl(0, 0, (void *)1) == -1) perror("ioctl");
+  // TODO: fork and execve
+
   STI;  
   shell();
 

@@ -4,8 +4,8 @@
 #include "cpu/idt.h"
 #include "lib/list.h"
 #include "stdint.h"
-
 #include "fs/vfs.h"
+
 
 #define P_SFREE    0x00
 #define P_SSLEEP   0x01
@@ -15,18 +15,21 @@
 #define P_SZOMB    0x05
 
 #define NOFILE 5
+#define NGROUPS 5
+
+struct cred {
+  uid_t uid, euid, suid;
+  gid_t gid, egid, sgid;
+
+  gid_t groups[NGROUPS];
+  int ngroups;
+};
 
 struct user {
-  uint16_t u_uid;
-  uint16_t u_gid;
-
-  // uint32_t u_arg[5];
-
-  struct inode u_cdir;
   char        *u_cdirname;
+  struct inode u_cdir;
 
-  // struct inode *u_rdir;
-
+  struct cred cred;
   struct file *u_ofile[NOFILE];
 };
 
@@ -76,5 +79,12 @@ void init_root_proc();
 
 void spawn_proc(void (*f)(), uint16_t cs, void *args);
 void exit_cur();
+
+/* crypt.c */
+
+uint32_t murmur3(const uint8_t *key, size_t len, uint32_t seed);
+int getuser(uid_t uid, char *buf);
+
+int chkcred(const char *usr, const char *cred);
 
 #endif

@@ -43,10 +43,13 @@ uint8_t strcmp(const char *s1, const char *s2);
 size_t  strlen(const char *s);
 char   *strtok(char *restrict str, const char *restrict delim);
 char   *strtok_r(char *restrict str, const char *restrict delim, char **restrict saveptr);
+char   *strchr(const char *s, int c);
 char   *strrchr(const char *s, int c);
+char   *strdup(const char *s);
 
-char *strdup(const char *s);
-void  zero_bss();
+int atoi(const char *str);
+
+void zero_bss();
 
 void kmalloc_init();
 
@@ -60,7 +63,10 @@ void free(void *ptr);
 
 void  *malloc_align(size_t siz, size_t align);
 void   free_align(void *ptr);
+
 size_t getused();
+size_t getmaxused();
+size_t gettrueused();
 
 // smbios.c
 void smbios_scan(void);

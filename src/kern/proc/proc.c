@@ -261,8 +261,9 @@ void init_root_proc() {
 
   printkf("kernel text size: %d B\n", procs[0].p_size);
 
-  root.u_uid  = 0;
-  root.u_gid  = 0;
+  // todo: properly initialize everything
+  root.cred.egid  = 0;
+  root.cred.euid  = 0;
   root.u_cdirname = malloc(CWD_MAXSIZ);
   strcpy(root.u_cdirname, "/home/");
   // cdir will handled by fs
