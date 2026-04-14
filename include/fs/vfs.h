@@ -2,6 +2,7 @@
 #define VFS_H
 
 #include "cpu/spinlock.h"
+#include "lib/list.h"
 #include "stddef.h"
 #include "stdint.h"
 #include <asm/sys/types.h>
@@ -16,15 +17,10 @@
 #define O_RDWR                 0x0004
 #define O_CREAT                0x0008
 #define O_JUSTGIVEMETHEADDRESS 0x0010
-/*
-#define INODE_FILE     S_IFREG
-#define INODE_DIR      S_IFDIR
-#define INODE_CHARDEV  S_IFCHR
-#define INODE_BLKDEV   S_IFBLK
-#define INODE_PIPE     0
-#define INODE_SYMLINK  0x0020
-#define INODE_MNTPOINT 0x0040
-*/
+
+// inode flags
+#define IN_DIRTY 0x0001
+#define IN_MOUNT 0x0002
 
 #define DT_MAXDIR 10
 
@@ -38,9 +34,7 @@ struct inode;
 struct file;
 
 // typedef uint32_t off_t;
-typedef int      pid_t;
-typedef int      ssize_t;
-typedef uint32_t mode_t;
+typedef ino_t fsino_t;
 
 typedef struct dirstream {
   uint8_t count;
@@ -60,8 +54,7 @@ struct statfs {
 
 // extra comments so i dont waste dynamic memory
 struct inode_ops {
-  // *must a dynamic inode *
-  struct inode *(*lookup)(struct inode *dir, const char *name);
+  ino_t (*lookup)(struct inode *parent, const char *name);
   int (*creat)(struct inode *dir, const char *name, uint16_t flg);
   int (*unlink)(struct inode *dir, const char *name);
 
@@ -103,11 +96,8 @@ struct dentry;
 
 struct mount {
   struct super_block *sb;
-
-  struct dentry *mntpoint;
-  struct dentry *root;
-  struct mount  *parent;
-  int            ref;
+  struct mount       *parent;
+  struct inode       *mountpt;
 };
 
 struct dentry {
@@ -122,26 +112,38 @@ struct super_block {
   uint16_t s_sbflags;
   uint32_t s_magic;
 
-  struct inode     *s_mounted;
+  dev_t s_dev;
+  ino_t s_inext;
+
+  struct inode *s_root;
+  struct inode *s_mounted;
+
   struct super_ops *s_op;
 
   void *generic_sbp;
 };
 
 struct inode {
-  mode_t   mode;
-  uint16_t fsflags;
-  uint32_t iflags;
-  size_t   size;
-  uint32_t ino;
+  mode_t mode;
+  size_t size;
 
-  uint16_t uid;
-  uint16_t gid;
+  unsigned short fsflags;
+  unsigned int   iflags;
+
+  ino_t ino;
+  dev_t dev;
+
+  uid_t uid;
+  gid_t gid;
+
+  unsigned short refs;
 
   struct super_block *sb;
-  struct direntry    *entaddr;
   struct inode_ops   *ops;
   struct file_ops    *fops;
+  struct mount       *mnt;
+
+  struct hlist_node hnode;
 
   void *pdata;
 };
@@ -174,7 +176,12 @@ struct dir_data {
 
 char *path_canon(const char *cwd, const char *path);
 
+/* useful stuff */
 struct inode *lookup_vfs(const char *path);
+struct inode *iget(struct super_block *sb, fsino_t fsino);
+void          iput(struct inode *in);
+void          imount(struct inode *in, struct mount *mnt);
+void          iadd(struct inode *in);
 
 /* syscalls */
 
@@ -191,7 +198,7 @@ int     fsys_pipe(int fd[2]);
 int     fsys_dup(int oldfd);
 int     fsys_dup2(int oldfd, int newfd);
 
-void init_rootfs();
+void set_dev(struct super_block *b, struct inode *root);
 
 /* library functions */
 int lsdir(const char *path, int flg);

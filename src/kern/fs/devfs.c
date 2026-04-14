@@ -21,6 +21,10 @@ struct file_ops  dev_fops;
 
 struct dir_data devfs_root;
 
+struct super_block devblock;
+struct inode devnode;
+struct mount devmnt;
+
 void dir_add(struct dir_data *dir, const char *name, struct inode *in) {
   struct dir_entry *dent = dir->entry;
   while (dent->flg & DE_USED)
@@ -31,19 +35,17 @@ void dir_add(struct dir_data *dir, const char *name, struct inode *in) {
   strcpy(dent->name, name);
 }
 
-struct inode *lookup_dev(struct inode *dir, const char *name) {
+fsino_t lookup_dev(struct inode *dir, const char *name) {
   struct dir_data *data = dir->pdata;
   if (!data)
-    return NULL;
+    return -1;
 
   for (int i = 0; i < data->count; i++) {
     if (!strcmp(name, data->entry[i].name)) {
-      struct inode *in = malloc(sizeof(*in));
-      memcpy(in, data->entry[i].in, sizeof(*in));
-      return in;
+      return data->entry[i].in->ino;
     }
   }
-  return NULL;
+  return -1;
 }
 
 int register_dev(uint16_t maj, uint16_t min, struct device *dev) {
@@ -60,8 +62,9 @@ struct inode *creat_devfs(const char *name, struct device *dev, uint16_t maj, ui
 
   in->mode = S_IFCHR | 0666;
   in->ino = maj << 16 | min;
-  // sb here...
+  in->sb = &devblock;
   in->fops = &dev_fops;
+  in->refs = 1;
 
   struct devidx *didx = malloc(sizeof(struct devidx));
   didx->maj           = maj;
@@ -70,6 +73,7 @@ struct inode *creat_devfs(const char *name, struct device *dev, uint16_t maj, ui
   in->pdata = didx;
   dev->idx = didx;
   dir_add(&devfs_root, name, in);
+  iadd(in);
   return in;
 }
 
@@ -141,6 +145,16 @@ int ioctl_devfs(struct file *file, int op, void *arg) {
   return -ENOSYS;
 }
 
+void dev_inoder(struct inode *in) {
+  for(int i = 0; i < 16; i++) {
+    struct inode *n = devfs_root.entry[i].in;
+    if(n->ino == in->ino) {
+      if(n)
+        memcpy(in, n, sizeof(*n));
+    }
+  }
+} 
+
 struct inode_ops dev_iops = {
     .lookup   = lookup_dev,
     .opendir  = opendir_devfs,
@@ -152,30 +166,9 @@ struct file_ops dev_fops = {
     .write = write_devfs,
     .ioctl = ioctl_devfs};
 
-/* syscall abstraction */
-
-int fsys_ioctl(int fd, uint32_t op, void *arg) {
-  if (fd >= NOFILE)
-    return -EBADF;
-  if (!arg)
-    return -EFAULT;
-
-  struct file *f = p_curproc->p_user->u_ofile[fd];
-
-  if (!f)
-    return -EBADF;
-  if (!(f->flags & F_USED))
-    return -EBADF;
-  if (!f->inode)
-    return -EBADF;
-  if (!(S_ISCHR(f->inode->mode)))
-    return -ENOTTY;
-
-  if (f->fops && f->fops->ioctl) {
-    return f->fops->ioctl(f, op, arg);
-  }
-  return -ENOSYS;
-}
+struct super_ops dev_sops = {
+  .read_inode = dev_inoder
+};
 
 /* some kind of inits */
 
@@ -204,6 +197,46 @@ struct device nulldev = {
         .write=write_null}};
 
 void init_devs() {
+  devmnt.sb = &devblock;
+
+  devnode.ino = 0;
+  devnode.mode = S_IFDIR | 0766;
+  devnode.ops = &dev_iops;
+  devnode.fops = &dev_fops;
+  devnode.refs = 1;
+  devnode.pdata = &devfs_root;
+
+  devblock.s_op = &dev_sops;
+  set_dev(&devblock, &devnode);
+
   creat_devfs("null", &nulldev, 0, 0);
   creat_devfs("zero", &nulldev, 0, 1);
 }
+
+/* syscall abstraction */
+
+int fsys_ioctl(int fd, uint32_t op, void *arg) {
+  if (fd >= NOFILE)
+    return -EBADF;
+  if (!arg)
+    return -EFAULT;
+
+  struct file *f = p_curproc->p_user->u_ofile[fd];
+
+  if (!f)
+    return -EBADF;
+  if (!(f->flags & F_USED))
+    return -EBADF;
+  if (!f->inode)
+    return -EBADF;
+  if (!(S_ISCHR(f->inode->mode)))
+    return -ENOTTY;
+
+  if (f->fops && f->fops->ioctl) {
+    return f->fops->ioctl(f, op, arg);
+  }
+  return -ENOSYS;
+}
+
+
+

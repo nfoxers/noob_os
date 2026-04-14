@@ -1,6 +1,7 @@
 #include "fs/fat12.h"
 #include "asm/sys/stat.h"
 #include "driver/time.h"
+#include "fs/devfs.h"
 #include "fs/vfs.h"
 #include "mem/mem.h"
 #include "proc/proc.h"
@@ -29,13 +30,26 @@ struct fat12info {
 struct fat12info fsinfo = {0};
 
 struct super_block g_fat_sb;
+struct fat_sb_info ramfat_info;
 
-extern struct inode root_dir;
+struct inode          rootnode;
+struct fat_inode_info rootinfo;
+
+extern struct super_block devblock;
+extern struct inode devnode;
+extern struct mount devmnt;
+
+struct file_ops  fat_fops;
+struct inode_ops fat_iops;
+struct super_ops fat_sops;
+
 extern struct proc *volatile p_curproc;
 
 #define ofile p_curproc->p_user->u_ofile
 
 void set_vfs(struct inode *);
+
+void set_special();
 
 void init_fs() {
   print_init("fat", "initializing filesystem driver...", 0);
@@ -57,14 +71,34 @@ void init_fs() {
   fsinfo.data_addr    = fsinfo.data_start * 512 + 0x7c00;
   fsinfo.data_sectors = BS->total_sec - fsinfo.data_start;
 
-  root_dir.ino   = 0;
-  root_dir.entaddr    = fsinfo.root_addr;
-  root_dir.size       = 0;
-  root_dir.mode = S_IFDIR | 0766;
+  ramfat_info.data_start = fsinfo.data_start;
+  ramfat_info.dir_start  = fsinfo.root_start;
+  ramfat_info.fat_start  = fsinfo.fat_start;
 
-  set_vfs(&root_dir);
+  g_fat_sb.s_dev   = 0;
+  g_fat_sb.s_inext = 0;
+  g_fat_sb.s_op    = &fat_sops;
 
-  memcpy(&p_curproc->p_user->u_cdir, &root_dir, sizeof(struct inode));
+  rootinfo.first_clust   = 0;
+  rootinfo.loc.dir_clust = 0;
+  rootinfo.loc.offset    = 0;
+
+  rootnode.sb = &g_fat_sb;
+  rootnode.gid   = 0;
+  rootnode.uid   = 0;
+  rootnode.ino   = 0;
+  rootnode.size  = 0;
+  rootnode.mode  = S_IFDIR | 0766;
+  rootnode.pdata = &rootinfo;
+  rootnode.ops   = &fat_iops;
+  rootnode.fops  = &fat_fops;
+
+  set_vfs(&rootnode);
+  set_dev(&g_fat_sb, &rootnode);
+
+  set_special();
+
+  memcpy(&p_curproc->p_user->u_cdir, &rootnode, sizeof(struct inode));
 
   for (int i = 0; i < NOFILE; i++) {
     ofile[i] = 0;
@@ -113,21 +147,22 @@ void set_perms(struct inode *in, uint8_t fatt) {
     in->mode &= ~(S_IWUSR | S_IWGRP | S_IWOTH);
 }
 
-int fat_lookup_from(const char *restrict path, const struct inode *restrict from, struct inode *restrict buf);
+fsino_t fat_lookup_from(const char *restrict path, const struct inode *restrict from);
 
-struct inode *finddir_fat(struct inode *in, const char *path) {
-  struct inode *inode = malloc(sizeof(struct inode));
+ino_t lookup_fat(struct inode *in, const char *path) {
+  fsino_t fsino = 0;
 
-  if (fat_lookup_from(path, in, inode)) {
-    free(inode);
+  if ((int)(fsino = fat_lookup_from(path, in)) == -1) {
     errno = ENOENT;
-    return NULL;
+    return -1;
   }
 
-  return inode;
+  return fsino;
 }
 
-inline void *get_addr(uint16_t lc) {
+void *get_addr(uint16_t lc) {
+  if (lc <= 2)
+    return fsinfo.root_addr;
   return (void *)(fsinfo.data_addr + (lc - 2) * 1024);
 }
 
@@ -150,10 +185,11 @@ void fat2normal(const char *fname, const char *ext, char *buf) {
   *buf = 0;
 }
 
-/* forward declarations */
+struct direntry *get_dirent(struct fat_dirloc *dl) {
+  return (struct direntry *)((char *)get_addr(dl->dir_clust) + dl->offset);
+}
 
-struct file_ops  fat_fops;
-struct inode_ops fat_iops;
+/* forward declarations */
 
 int fat_read(struct inode *in, void *buf, size_t off, size_t count);
 
@@ -163,47 +199,7 @@ DIR *opendir_fat(struct inode *in) {
   if (!in || !S_ISDIR(in->mode))
     return NULL;
 
-  DIR *d = malloc(sizeof(DIR) * DT_MAXDIR);
-  struct direntry *dr = in->entaddr == root_dir.entaddr ? root_dir.entaddr : (struct direntry *)get_addr(in->entaddr->low_cluster);
-
-  // printkf("entaddr: %x\n", dr);
-
-  int i;
-  for (i = 0; i < DT_MAXDIR; i++, dr++) {
-    if (!dr->fname[0])
-      break;
-    if ((uint8_t)dr->fname[0] == 0xe5)
-      continue;
-
-    d[i].size = dr->size;
-    //snprintkf(d[i].data, DIRENT_MAXSIZ, "% 8.8s % 3.3s", dr->fname, dr->ext);
-    d[i].type &= S_IFMT;
-    d[i].type |= dr->fatt & FAT_SUBDIR ? S_IFDIR : S_IFREG;
-
-    char buf[20];
-    fat2normal(dr->fname, dr->ext, buf);
-    strncpy(d[i].data, buf, sizeof buf);
-
-    d[i].in         = malloc(sizeof(struct inode));
-    struct inode *k = finddir_fat(in, buf);
-
-    if (!k) {
-      free(d[i].in);
-      d[i].in = NULL;
-      printkf("unable to find %s\n", buf);
-      continue;
-    }
-
-    memcpy(d[i].in, k, sizeof(struct inode));
-    free(k);
-  }
-
-  d[0].count = i;
-  /*
-  d[0].in = malloc(sizeof(struct inode));
-  memcpy(d[0].in, in, sizeof(struct inode));
-  */
-  return d;
+  return (DIR *)-ENOSYS;
 }
 
 int closedir_fat(struct inode *dir, DIR *d) {
@@ -224,14 +220,13 @@ int create_fat(struct inode *dir, const char *name, uint16_t flg) {
   return -ENOSYS;
 }
 
-int unlink_fat(struct inode *dir, const char *name) {
-  struct inode buf;
-  if (fat_lookup_from(name, dir, &buf)) {
+int unlink_fat(struct inode *in, const char *name) {
+  fsino_t i = fat_lookup_from(name, in);
+  if (i < 0)
     return -ENOENT;
-  }
-
-  buf.entaddr->fname[0] = 0xe5;
-
+  struct inode    *k = iget(in->sb, i);
+  struct direntry *d = get_dirent(&((struct fat_inode_info *)k->pdata)->loc);
+  d->fname[0]        = 0xe5;
   return 0;
 }
 
@@ -254,20 +249,23 @@ int write_fat(struct file *f, const void *buf, size_t siz) {
 }
 
 inline void set_vfs(struct inode *in) {
-  in->ops = &fat_iops;
+  in->ops  = &fat_iops;
   in->fops = &fat_fops;
 }
 
-int fat_lookup_from(const char *restrict path, const struct inode *restrict from, struct inode *restrict buf) {
+fsino_t fat_lookup_from(const char *restrict path, const struct inode *restrict from) {
   char *pth = strdup(path);
 
   char *sv;
   char *tok = strtok_r(pth, "/", &sv);
 
   struct direntry *dr;
+  struct direntry *par;
   int              entries = 32;
   int              found   = 0;
   int              cluster = 0;
+
+  fsino_t ret = -1;
 
   if (!from) {
     cluster = 0x7fffff00;
@@ -277,8 +275,9 @@ int fat_lookup_from(const char *restrict path, const struct inode *restrict from
   while (tok) {
     found = 0;
 
+    par = dr;
     if (cluster == 0) {
-      dr      = get_addr(from->entaddr->low_cluster);
+      dr      = get_addr(((struct fat_inode_info *)from->pdata)->first_clust);
       entries = 32;
     } else if (cluster == 0x7fffff00) {
       entries = 32;
@@ -287,30 +286,20 @@ int fat_lookup_from(const char *restrict path, const struct inode *restrict from
       entries = 1024 / sizeof(struct direntry);
     }
 
+    printkf("dir: %x\n", (char *)dr - 0x7c00);
     for (int i = 0; i < entries; i++) {
+      printkf("%s vs %s\n", dr[i].fname, tok);
       if (dr[i].fname[0] == 0x00)
         break;
       if ((uint8_t)dr[i].fname[0] == 0xE5)
         continue;
       if (fat_name_match(&dr[i], tok)) {
         found++;
-        buf->mode &= ~S_IFMT;
         if (dr[i].fatt & FAT_SUBDIR) {
-          cluster   = dr[i].low_cluster;
-          buf->mode |= S_IFDIR;
-        } else {
-          buf->mode |= S_IFREG;
+          cluster = dr[i].low_cluster;
         }
 
-        buf->ino = dr[i].low_cluster;
-        buf->entaddr  = &dr[i];
-        //printkf("ent: %p\n", buf->entaddr);
-        buf->size     = dr[i].size;
-        buf->sb = &g_fat_sb;
-        buf->fsflags = dr[i].fatt;
-
-        set_perms(buf, dr[i].fatt);
-        set_vfs(buf);
+        ret = (par->low_cluster << 16) | ((uintptr_t)&dr[i] - (uintptr_t)dr);
 
         break;
       }
@@ -318,28 +307,72 @@ int fat_lookup_from(const char *restrict path, const struct inode *restrict from
 
     if (!found) {
       free(pth);
-      return 1;
+      return -1;
     }
 
     tok = strtok_r(NULL, "/", &sv);
   }
 
   free(pth);
-  return 0;
+  if (found)
+    return ret;
+
+  return -1;
+}
+
+mode_t get_mode(uint8_t fatt) {
+  mode_t m = 0766;
+  if (fatt & FAT_SUBDIR) {
+    m |= S_IFDIR;
+    return m;
+  }
+  m |= S_IFREG;
+  return m;
+}
+
+void fat_inoder(struct inode *r) {
+  fsino_t           f   = r->ino;
+  struct fat_dirloc loc = {.dir_clust = f >> 16, .offset = f & ((1 << 16) - 1)};
+  printkf("clust: %d off: %d\n", loc.dir_clust, loc.offset);
+  struct direntry  *d   = get_dirent(&loc);
+
+  printkf("d: %p\n", (char *)d - 0x7c00);
+
+  struct fat_inode_info *inf = malloc(sizeof(struct fat_inode_info));
+  inf->attr                  = d->fatt;
+  inf->first_clust           = d->low_cluster;
+  memcpy(&inf->loc, &loc, sizeof(loc));
+  inf->siz = d->size;
+
+  r->fops  = &fat_fops;
+  r->ops   = &fat_iops;
+  r->mode  = get_mode(d->fatt);
+  r->pdata = inf;
 }
 
 struct inode_ops fat_iops = {
-  .opendir = opendir_fat,
-  .closedir = closedir_fat,
-  .lookup = finddir_fat,
-  .unlink = unlink_fat
-};
+    .opendir  = opendir_fat,
+    .closedir = closedir_fat,
+    .lookup   = lookup_fat,
+    .unlink   = unlink_fat};
 
 struct file_ops fat_fops = {
     .open  = 0,
     .close = 0,
     .read  = read_fat,
     .write = write_fat};
+
+struct super_ops fat_sops = {
+    .read_inode = fat_inoder};
+
+void set_special() {
+  init_devs();
+
+  fsino_t dev_fs = fat_lookup_from("dev", &rootnode);
+
+  struct inode *in = iget(&g_fat_sb, dev_fs);
+  imount(in, &devmnt);
+}
 
 /* inner filesystem */
 
@@ -381,7 +414,7 @@ int fat_read(struct inode *in, void *buf, size_t off, size_t count) {
   if (!in || !buf)
     return 0;
 
-  uint16_t cluster = in->entaddr->low_cluster;
+  uint16_t cluster = ((struct fat_inode_info *)in->pdata)->first_clust;
   size_t   read    = 0;
 
   cluster = off > 1024 ? fattab_read(cluster) : cluster;

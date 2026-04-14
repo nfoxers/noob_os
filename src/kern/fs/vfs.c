@@ -1,5 +1,6 @@
 #include "fs/vfs.h"
 #include "asm/sys/stat.h"
+#include "lib/list.h"
 #include "mem/mem.h"
 #include "proc/proc.h"
 #include "syscall/syscall.h"
@@ -9,7 +10,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
-extern struct inode rootinode;
+extern struct inode rootnode;
+
+#define HITAB_MAX 64
+
+struct hlist_head hitab[HITAB_MAX];
 
 #define MAX_PLEN 127
 
@@ -76,6 +81,97 @@ char *path_canon(const char *cwd, const char *path) {
 
 /* vfs internals */
 
+dev_t nextdev = 0;
+
+void set_dev(struct super_block *b, struct inode *root) {
+  b->s_dev = nextdev++;
+  b->s_root = root;
+  b->generic_sbp = NULL;
+
+  root->dev = b->s_dev;
+  root->sb = b;
+}
+
+uint32_t ihash(dev_t dev, ino_t ino) {
+  return (dev ^ ino) % HITAB_MAX;
+}
+
+struct inode *inode_alloc(struct super_block *sb) {
+  struct inode *in = malloc(sizeof(struct inode));
+  in->dev = sb->s_dev;
+  return in;
+}
+
+void iadd(struct inode *in) {
+  uint32_t h = ihash(in->sb->s_dev, in->ino);
+  hlist_add_head(&in->hnode, &hitab[h]);
+}
+
+struct inode *iget(struct super_block *sb, fsino_t fsino) {
+  if(!sb) return NULL;
+
+  uint32_t h = ihash(sb->s_dev, fsino);
+
+  struct hlist_node *k = hitab[h].first;
+  printkf("hash: %d\n", h);
+  
+  while(k) {
+    //printkf("cache bucket %x %x %x\n", k, (char *)k - offsetof(struct inode, hnode));
+    struct inode *in = container_of(k, struct inode, hnode);
+    printkf("cache bucket\n");
+    printkf("ino: %x %x\n", in->ino, fsino);
+    printkf("in: %x %x\n", in->sb->s_dev, sb->s_dev);
+    if((in->sb->s_dev == sb->s_dev) && (in->ino == fsino)) {
+      printkf("cache hit\n");
+      in->refs++;
+      return in;
+    }
+    k = k->next;
+  }
+
+  printkf("cache miss\n");
+  struct inode *in = malloc(sizeof(struct inode));
+  in->ino = fsino;
+  in->dev = sb->s_dev;
+  in->sb = sb;
+  in->refs = 1;
+
+  if(sb->s_op && sb->s_op->read_inode)
+    sb->s_op->read_inode(in);
+
+  hlist_add_head(&in->hnode, &hitab[h]);
+  return in;
+}
+
+void iput(struct inode *in) {
+  if(in->refs == 0) {
+    printkf("err: inode has 0 refs at iput\n");
+    return;
+  }
+
+  in->refs--;
+
+  if(in->refs > 0) return;
+
+  if(in->iflags & IN_DIRTY) {
+    if(in->sb->s_op->write_inode)
+      in->sb->s_op->write_inode(0, in);
+  }
+
+  hlist_del(&in->hnode);
+  if(in->sb->s_op->put_inode) in->sb->s_op->put_inode(in);
+  free(in);
+}
+
+void imount(struct inode *in, struct mount *mnt) {
+  in->iflags |= IN_MOUNT;
+  in->mnt = mnt;
+}
+
+void iput_err(struct inode *in) {
+  if(in->refs > 1) in->refs--;
+}
+
 int read_fs(struct file *restrict file, size_t siz, uint8_t *restrict b) {
   if (file->fops && file->fops->read)
     return file->fops->read(file, b, siz);
@@ -128,11 +224,12 @@ int unlink_fs(struct inode *in, const char *name) {
   return -ENOSYS;
 }
 
-struct inode *lookup_fs(struct inode *restrict in, const char *restrict name) {
+fsino_t lookup_fs(struct inode *restrict in, const char *restrict name) {
   if ((S_ISDIR(in->mode)) && in->ops && in->ops->lookup) {
     return in->ops->lookup(in, name);
   }
-  return NULL;
+  printkf("no lookup func\n");
+  return -1;
 }
 
 // vfs abstraction
@@ -145,27 +242,34 @@ struct inode *lookup_vfs_i(char *pth) {
       mdepth++;
   }
 
-  struct inode *inode = &rootinode;
+  struct inode *inode = &rootnode;
   char         *sv;
 
   char *tok = strtok_r(pth, "/", &sv);
 
   if (!tok) { // effective path = / (root)
-    struct inode *in = malloc(sizeof(struct inode));
-    memcpy(in, inode, sizeof(struct inode));
     // free(pth);
-    return in;
+    return iget(rootnode.sb, rootnode.ino);
   }
 
-  struct inode tmp = rootinode;
+  ino_t ino;
   while (tok) {
-    inode = lookup_fs(&tmp, tok);
-
-    if (!inode) {
+    printkf("searching for: %s\n", tok);
+    ino = lookup_fs(inode, tok);
+    printkf("ino: %d\n", ino);
+    if((int)ino == -1) {
       printkf("lookup_vfs: file not found\n");
       // free(pth);
       return NULL;
     }
+    inode = iget(inode->sb, ino);
+    printkf("inode (iget): %x\n", inode);
+    if(inode->iflags & IN_MOUNT) {
+      printkf("inode is a mount\n");
+      inode = inode->mnt->sb->s_root;
+    }
+
+    if(!inode) return NULL;
 
     depth++;
 
@@ -174,8 +278,7 @@ struct inode *lookup_vfs_i(char *pth) {
       return inode;
     }
 
-    memcpy(&tmp, inode, sizeof(tmp));
-    free(inode);
+    //memcpy(&tmp, inode, sizeof(tmp));
 
     tok = strtok_r(NULL, "/", &sv);
   }
@@ -359,7 +462,7 @@ int fsys_open(const char *pathname, int flags) {
 
   int fd = findfreefd();
   if (fd == -1) {
-    free(in);
+    iput_err(in);
     return -ENFILE;
   }
 
@@ -377,7 +480,7 @@ int fsys_open(const char *pathname, int flags) {
   if (f->fops && f->fops->open) {
     if ((r = f->fops->open(in, f)) < 0) {
       free(f);
-      free(in);
+      iput_err(in);
       return r;
     }
   }
@@ -405,7 +508,7 @@ int fsys_close(int fd) {
   if (f->refcont == 0) {
     if (f->fops && f->fops->close)
       f->fops->close(f);
-    free(f->inode);
+    iput_err(f->inode);
     free(f);
   }
 
@@ -425,7 +528,7 @@ int fsys_unlink(const char *pathname) {
     return -EFAULT;
 
   int ret = unlink_fs(in, nam);
-  free(in);
+  iput_err(in);
   free(tmp);
   return ret;
 }
@@ -438,7 +541,7 @@ int fsys_creat(const char *pathname, mode_t mode) {
     return -EFAULT;
 
   int ret = create_fs(in, nam, mode);
-  free(in);
+  iput_err(in);
   free(tmp);
   return ret;
 }
@@ -456,8 +559,6 @@ DIR *fsys_opendir(const char *path) {
   }
 
   DIR *ret = opendir_fs(in);
-  free(in);
-
   return ret;
 };
 
@@ -480,7 +581,7 @@ int fsys_chdir(const char *path) {
   if (!S_ISDIR(inp->mode)) {
     printkf("%s: not a directory\n", pth);
 
-    free(inp);
+
     free(pth);
     return -ENOTDIR;
   }
@@ -488,7 +589,7 @@ int fsys_chdir(const char *path) {
   memcpy(&p_curproc->p_user->u_cdir, inp, sizeof(struct inode));
   strcpy(p_curproc->p_user->u_cdirname, pth);
 
-  free(inp);
+  iput_err(inp);
   free(pth);
   return 0;
 }
@@ -585,9 +686,8 @@ int lsdir(const char *path, int flg) {
 
   if (closedir(in, d)) {
     perror("ls: closedir");
-    free(in);
   }
-  free(in);
+  iput_err(in);
   return 0;
 }
 

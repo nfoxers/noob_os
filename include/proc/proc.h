@@ -68,7 +68,6 @@ struct run_queue {
 };
 
 extern struct proc *volatile p_curproc;
-extern struct inode root_dir;
 
 void general_switch();
 void schedule();

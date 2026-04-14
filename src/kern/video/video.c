@@ -94,7 +94,7 @@ void putchr(char c) {
   }
 
   setcursor();
-  // vflush();
+  //for(int i = 0; i < 100; i++)vflush();
 }
 
 void printk(char *a) {
@@ -126,7 +126,7 @@ void vflush() {
 }
 
 void vscroll_down() {
-  if (bottom == 25)
+  if (bottom == 25 * (V_MAXPAGE - 1))
     return;
   bottom++;
 

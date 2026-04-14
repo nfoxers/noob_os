@@ -55,6 +55,27 @@ struct direntry {
   uint32_t size;
 } __attribute__((packed));
 
+struct fat_sb_info {
+  uint16_t clust_siz;
+  uint8_t fats, fatver;
+  uint16_t fat_start, fat_len;
+  uint16_t dir_start, dir_ents;
+  uint16_t data_start;
+  uint32_t clusters;
+};
+
+struct fat_dirloc {
+  uint32_t dir_clust;
+  uint32_t offset;
+};
+
+struct fat_inode_info {
+  uint32_t first_clust;
+  uint32_t siz;
+  uint8_t attr;
+  struct fat_dirloc loc;
+};
+
 void init_fs();
 
 #endif

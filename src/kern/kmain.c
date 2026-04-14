@@ -34,7 +34,7 @@ void setup() {
   init_pic();
   init_fs();
 
-  init_rootfs(); 
+  //init_rootfs(); 
 
   set_gdt();
   set_apic();
@@ -50,7 +50,7 @@ void setup() {
 
   page_init();
 
-  init_devs();
+  //init_devs();
   init_kbd();
   init_tty();
 
@@ -65,7 +65,7 @@ void setup() {
 void kmain(void) {
   setup();
 
-  printkf("stat for root: %d\n", chkcred("user", "toor"));
+  //printkf("stat for root: %d\n", chkcred("user", "toor"));
 
   // TODO: fork and execve
 

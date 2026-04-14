@@ -76,7 +76,7 @@ void set_pipe(int fd, int r, int rr) {
   f->flags             = F_USED | (r ? O_RDONLY : O_WRONLY);
   f->inode             = malloc(sizeof(struct inode));
   f->inode->mode       = S_IFIFO | (r ? 0400 : 0200);
-  memset(f->inode->entaddr, 0, sizeof(struct pipe));
+  //memset(f->inode->entaddr, 0, sizeof(struct pipe));
   memcpy(&f->inode->fops, &pipe_fops, sizeof(struct file_ops));
 }
 
