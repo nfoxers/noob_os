@@ -31,22 +31,14 @@ __BEGIN_DECLS
 #include "ams/bits/struct_stat.h"
 #include "ams/bits/stat.h"
 
-#if defined __USE_MISC || defined __USE_XOPEN
 #define S_IFMT  __S_IFMT
 #define S_IFDIR __S_IFDIR
 #define S_IFCHR __S_IFCHR
 #define S_IFBLK __S_IFBLK
 #define S_IFREG __S_IFREG
-#ifdef __S_IFIFO
 #define S_IFIFO __S_IFIFO
-#endif
-#ifdef __S_IFLNK
 #define S_IFLNK __S_IFLNK
-#endif
-#if (defined __USE_MISC || defined __USE_XOPEN_EXTENDED) && defined __S_IFSOCK
 #define S_IFSOCK __S_IFSOCK
-#endif
-#endif
 
 /* Test macros for file types.	*/
 
@@ -56,27 +48,17 @@ __BEGIN_DECLS
 #define S_ISCHR(mode) __S_ISTYPE((mode), __S_IFCHR)
 #define S_ISBLK(mode) __S_ISTYPE((mode), __S_IFBLK)
 #define S_ISREG(mode) __S_ISTYPE((mode), __S_IFREG)
-#ifdef __S_IFIFO
 #define S_ISFIFO(mode) __S_ISTYPE((mode), __S_IFIFO)
-#endif
-#ifdef __S_IFLNK
 #define S_ISLNK(mode) __S_ISTYPE((mode), __S_IFLNK)
-#endif
-
-
-#if (defined __USE_XOPEN_EXTENDED || defined __USE_XOPEN2K) && defined __S_IFSOCK
 #define S_ISSOCK(mode) __S_ISTYPE((mode), __S_IFSOCK)
-#endif
 
 /* These are from POSIX.1b.  If the objects are not implemented using separate
    distinct file types, the macros always will evaluate to zero.  Unlike the
    other S_* macros the following three take a pointer to a `struct stat'
    object as the argument.  */
-#ifdef __USE_POSIX199309
 #define S_TYPEISMQ(buf)  __S_TYPEISMQ(buf)
 #define S_TYPEISSEM(buf) __S_TYPEISSEM(buf)
 #define S_TYPEISSHM(buf) __S_TYPEISSHM(buf)
-#endif
 
 /* Protection bits.  */
 

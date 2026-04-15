@@ -60,7 +60,7 @@ typedef __off_t off_t;
 #ifndef __uid_t_defined
 typedef __uid_t uid_t;
 #define __uid_t_defined
-#endif /* X/Open */
+#endif
 
 struct stat {
 

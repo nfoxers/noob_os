@@ -18,8 +18,6 @@
 #ifndef _BITS_STAT_H
 #define _BITS_STAT_H	1
 
-
-
 /* Encoding of the file mode.  */
 
 #define	__S_IFMT	0170000	/* These bits determine file type.  */
@@ -47,10 +45,5 @@
 #define	__S_IREAD	0400	/* Read by owner.  */
 #define	__S_IWRITE	0200	/* Write by owner.  */
 #define	__S_IEXEC	0100	/* Execute by owner.  */
-
-#ifdef __USE_ATFILE
-# define UTIME_NOW	((1l << 30) - 1l)
-# define UTIME_OMIT	((1l << 30) - 2l)
-#endif
 
 #endif	/* bits/stat.h */

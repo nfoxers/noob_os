@@ -37,17 +37,12 @@ typedef struct
 {
   unsigned long int __val[_SIGSET_NWORDS];
 } __sigset_t;
-
 #endif
 
 typedef __sigset_t sigset_t;
 
 /* Get definition of timer specification structures.  */
-#ifdef __USE_TIME_BITS64
-typedef __time64_t time_t;
-#else
 typedef __time_t time_t;
-#endif
 struct timeval {
   __time_t      tv_sec;  /* Seconds.  */
   __suseconds_t tv_usec; /* Microseconds.  */
@@ -55,9 +50,8 @@ struct timeval {
 
 #ifdef __USE_XOPEN2K
 struct timespec {
-  __time_t tv_sec; /* Seconds.  */
+  __time_t          tv_sec;  /* Seconds.  */
   __syscall_slong_t tv_nsec; /* Nanoseconds.  */
-
 };
 #endif
 

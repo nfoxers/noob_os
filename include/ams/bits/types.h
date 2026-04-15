@@ -26,29 +26,13 @@
 #include <features.h>
 /* Determine the wordsize from the preprocessor defines.  */
 
-#if defined __x86_64__ && !defined __ILP32__
-#define __WORDSIZE 64
-#else
 #define __WORDSIZE                32
 #define __WORDSIZE32_SIZE_ULONG   0
 #define __WORDSIZE32_PTRDIFF_LONG 0
-#endif
 
-#ifdef __x86_64__
-#define __WORDSIZE_TIME64_COMPAT32 1
-/* Both x86-64 and x32 use the 64-bit system call interface.  */
-#define __SYSCALL_WORDSIZE 64
-#else
 #define __WORDSIZE_TIME64_COMPAT32 0
-#endif
-
-#if defined __x86_64__ && defined __ILP32__
-/* For x32, time is 64-bit even though word size is 32-bit.  */
-#define __TIMESIZE 64
-#else
-/* For others, time size is word size.  */
 #define __TIMESIZE __WORDSIZE
-#endif
+
 
 /* Convenience types.  */
 typedef unsigned char      __u_char;
@@ -63,13 +47,9 @@ typedef signed short int   __int16_t;
 typedef unsigned short int __uint16_t;
 typedef signed int         __int32_t;
 typedef unsigned int       __uint32_t;
-#if __WORDSIZE == 64
-typedef signed long int   __int64_t;
-typedef unsigned long int __uint64_t;
-#else
 __extension__ typedef signed long long int   __int64_t;
 __extension__ typedef unsigned long long int __uint64_t;
-#endif
+
 
 /* Smallest types with at least a given width.  */
 typedef __int8_t   __int_least8_t;
@@ -82,22 +62,12 @@ typedef __int64_t  __int_least64_t;
 typedef __uint64_t __uint_least64_t;
 
 /* quad_t is also 64 bits.  */
-#if __WORDSIZE == 64
-typedef long int          __quad_t;
-typedef unsigned long int __u_quad_t;
-#else
 __extension__ typedef long long int          __quad_t;
 __extension__ typedef unsigned long long int __u_quad_t;
-#endif
 
 /* Largest integral types.  */
-#if __WORDSIZE == 64
-typedef long int          __intmax_t;
-typedef unsigned long int __uintmax_t;
-#else
 __extension__ typedef long long int          __intmax_t;
 __extension__ typedef unsigned long long int __uintmax_t;
-#endif
 
 /* The machine-dependent file <bits/typesizes.h> defines __*_T_TYPE
    macros for each of the OS types we define below.  The definitions
@@ -134,7 +104,6 @@ __extension__ typedef unsigned long long int __uintmax_t;
 #define __U32_TYPE       unsigned int
 #define __SLONGWORD_TYPE long int
 #define __ULONGWORD_TYPE unsigned long int
-#if __WORDSIZE == 32
 #define __SQUAD_TYPE   __int64_t
 #define __UQUAD_TYPE   __uint64_t
 #define __SWORD_TYPE   int
@@ -146,7 +115,7 @@ __extension__ typedef unsigned long long int __uintmax_t;
 /* We want __extension__ before typedef's that use nonstandard base types
    such as `long long' in C89 mode.  */
 #define __STD_TYPE __extension__ typedef
-#endif
+
 #include "ams/bits/typesizes.h" /* Defines __*_T_TYPE macros.  */
 
 __STD_TYPE __DEV_T_TYPE         __dev_t;       /* Type of device numbers.  */
