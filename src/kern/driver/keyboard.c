@@ -1,5 +1,5 @@
 #include "driver/keyboard.h"
-#include "asm/termbits.h"
+#include "ams/termbits.h"
 #include "driver/serial.h"
 #include "cpu/idt.h"
 #include "driver/tty.h"

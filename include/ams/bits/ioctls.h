@@ -16,7 +16,7 @@
    <https://www.gnu.org/licenses/>.  */
 
 /* Use the definitions from the kernel header files.  */
-#include "asm/ioctls.h"
+#include "ams/ioctls.h"
 
 /* Routing table calls.  */
 #define SIOCADDRT	0x890B		/* add routing table entry	*/

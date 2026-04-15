@@ -19,8 +19,8 @@
 #ifndef _BITS_STRUCT_STAT_H
 #define _BITS_STRUCT_STAT_H 1
 
-#include <asm/bits/types.h> /* For __mode_t and __dev_t.  */
-#include <asm/bits/types/time.h>
+#include "ams/bits/types.h" /* For __mode_t and __dev_t.  */
+#include "ams/bits/types/time.h"
 
 /* The Single Unix specification says that some more types are
    available here.  */

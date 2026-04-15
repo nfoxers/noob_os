@@ -26,7 +26,7 @@
 
 __BEGIN_DECLS
 
-#include <asm/bits/types.h>
+#include "ams/bits/types.h"
 
 #ifdef	__USE_MISC
 # ifndef __u_char_defined
@@ -178,7 +178,7 @@ typedef int register_t __attribute__ ((__mode__ (__word__)));
 /* In BSD <sys/types.h> is expected to define BYTE_ORDER.  */
 
 /* It also defines `fd_set' and the FD_* macros for `select'.  */
-# include <asm/sys/select.h>
+# include <ams/sys/select.h>
 #endif /* Use misc.  */
 
 

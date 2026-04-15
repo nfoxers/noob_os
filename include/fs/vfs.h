@@ -5,9 +5,9 @@
 #include "lib/list.h"
 #include "stddef.h"
 #include "stdint.h"
-#include <asm/sys/types.h>
+#include "ams/sys/types.h"
 
-#include "asm/sys/stat.h"
+#include "ams/sys/stat.h"
 
 #define F_USED 0x1000
 #define F_ADDR 0x0008

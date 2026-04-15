@@ -1,5 +1,4 @@
 #include "fs/fat12.h"
-#include "asm/sys/stat.h"
 #include "driver/time.h"
 #include "fs/devfs.h"
 #include "fs/vfs.h"

@@ -1,4 +1,4 @@
-#include "asm/sys/stat.h"
+#include "ams/sys/stat.h"
 #include "fs/vfs.h"
 #include "mem/mem.h"
 #include "proc/proc.h"

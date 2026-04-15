@@ -17,7 +17,7 @@
    <https://www.gnu.org/licenses/>.  */
 
 /* Get definition of constants for use with `ioctl'.  */
-#include <asm/ioctls.h>
+#include <ams/ioctls.h>
 
 
 struct winsize

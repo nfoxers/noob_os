@@ -24,11 +24,12 @@
 
 #include <features.h>
 
-#include <asm/bits/types.h> /* For __mode_t and __dev_t.  */
+#include "ams/bits/types.h" /* For __mode_t and __dev_t.  */
 
 __BEGIN_DECLS
 
-#include <asm/bits/stat.h>
+#include "ams/bits/struct_stat.h"
+#include "ams/bits/stat.h"
 
 #if defined __USE_MISC || defined __USE_XOPEN
 #define S_IFMT  __S_IFMT

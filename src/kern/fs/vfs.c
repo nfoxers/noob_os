@@ -1,5 +1,4 @@
 #include "fs/vfs.h"
-#include "asm/sys/stat.h"
 #include "lib/list.h"
 #include "mem/mem.h"
 #include "proc/proc.h"

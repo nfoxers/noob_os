@@ -23,17 +23,17 @@
 __BEGIN_DECLS
 
 /* Get the list of `ioctl' requests and related constants.  */
-#include "asm/bits/ioctls.h"
+#include "ams/bits/ioctls.h"
 
 /* Define some types used by `ioctl' requests.  */
-#include "asm/bits/ioctl-types.h"
+#include "ams/bits/ioctl-types.h"
 
 /* On a Unix system, the system <sys/ioctl.h> probably defines some of
    the symbols we define in <sys/ttydefaults.h> (usually with the same
    values).  The code to generate <bits/ioctls.h> has omitted these
    symbols to avoid the conflict, but a Unix program expects <sys/ioctl.h>
    to define them, so we must include <sys/ttydefaults.h> here.  */
-#include "asm/sys/ttydefaults.h"
+#include "ams/sys/ttydefaults.h"
 
 __END_DECLS
 

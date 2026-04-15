@@ -1,5 +1,5 @@
 #include "driver/serial.h"
-#include "asm/termbits.h"
+#include "ams/termbits.h"
 #include "cpu/idt.h"
 #include "driver/tty.h"
 #include "driver/tty/uart.h"

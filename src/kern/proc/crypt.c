@@ -1,4 +1,4 @@
-#include "asm/sys/types.h"
+#include "ams/sys/types.h"
 #include "proc/proc.h"
 #include "lib/errno.h"
 #include "syscall/syscall.h"

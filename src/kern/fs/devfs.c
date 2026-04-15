@@ -1,5 +1,4 @@
 #include "fs/devfs.h"
-#include "asm/sys/stat.h"
 #include "fs/fat12.h"
 #include "fs/vfs.h"
 #include "lib/errno.h"

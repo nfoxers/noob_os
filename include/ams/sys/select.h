@@ -24,7 +24,7 @@
 #include <features.h>
 
 /* Get definition of needed basic types.  */
-#include <asm/bits/types.h>
+#include "ams/bits/types.h"
 
 /* Get __FD_* definitions.  */
 

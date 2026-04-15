@@ -18,7 +18,7 @@
 #ifndef _BITS_STAT_H
 #define _BITS_STAT_H	1
 
-#include <asm/bits/struct_stat.h>
+
 
 /* Encoding of the file mode.  */
 

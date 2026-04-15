@@ -9,7 +9,7 @@
 typedef unsigned char cc_t;
 typedef unsigned int  speed_t;
 
-#include "asm/sys/ioctl.h"
+#include "ams/sys/ioctl.h"
 
 /* c_iflag bits */
 #define IGNBRK 0x001 /* Ignore break condition */

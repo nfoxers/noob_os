@@ -9,7 +9,7 @@
 #define TTYBUFSIZ 32
 #define TTYLINESIZ 32
 
-#include "asm/termbits.h"
+#include "ams/termbits.h"
 
 struct tty;
 

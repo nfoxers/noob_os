@@ -1,6 +1,6 @@
 #include "driver/tty.h"
-#include "asm/sys/ioctl.h"
-#include "asm/termbits.h"
+#include "ams/sys/ioctl.h"
+#include "ams/termbits.h"
 #include "cpu/spinlock.h"
 #include "fs/vfs.h"
 #include "mem/mem.h"

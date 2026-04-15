@@ -147,7 +147,7 @@ __extension__ typedef unsigned long long int __uintmax_t;
    such as `long long' in C89 mode.  */
 #define __STD_TYPE __extension__ typedef
 #endif
-#include <asm/bits/typesizes.h> /* Defines __*_T_TYPE macros.  */
+#include "ams/bits/typesizes.h" /* Defines __*_T_TYPE macros.  */
 
 __STD_TYPE __DEV_T_TYPE         __dev_t;       /* Type of device numbers.  */
 __STD_TYPE __UID_T_TYPE         __uid_t;       /* Type of user identifications.  */
