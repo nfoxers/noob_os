@@ -86,4 +86,6 @@ int getuser(uid_t uid, char *buf);
 
 int chkcred(const char *usr, const char *cred);
 
+uint32_t murmur3(const uint8_t *key, size_t len, uint32_t seed);
+
 #endif

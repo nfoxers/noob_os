@@ -32,7 +32,7 @@ void setup() {
 
   set_idtr();  
   init_pic();
-  init_fs();
+
 
   //init_rootfs(); 
 
@@ -50,6 +50,8 @@ void setup() {
 
   page_init();
 
+  init_fs();
+  
   //init_devs();
   init_kbd();
   init_tty();

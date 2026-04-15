@@ -10,7 +10,7 @@
 #include <stdint.h>
 
 #define MAXMAJ 5
-#define MAXMIN 2
+#define MAXMIN 5
 
 #define NODEVFS (MAXMAJ * MAXMIN)
 
@@ -146,10 +146,13 @@ int ioctl_devfs(struct file *file, int op, void *arg) {
 }
 
 void dev_inoder(struct inode *in) {
+  if(in->ino == 0) {
+    memcpy(in, &devnode, sizeof(*in));
+    return;
+  }
   for(int i = 0; i < 16; i++) {
     struct inode *n = devfs_root.entry[i].in;
     if(n->ino == in->ino) {
-      if(n)
         memcpy(in, n, sizeof(*n));
     }
   }
@@ -209,8 +212,8 @@ void init_devs() {
   devblock.s_op = &dev_sops;
   set_dev(&devblock, &devnode);
 
-  creat_devfs("null", &nulldev, 0, 0);
-  creat_devfs("zero", &nulldev, 0, 1);
+  creat_devfs("null", &nulldev, 0, 1);
+  creat_devfs("zero", &nulldev, 0, 2);
 }
 
 /* syscall abstraction */

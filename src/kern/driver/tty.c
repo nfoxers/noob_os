@@ -68,7 +68,7 @@ ssize_t ttydev_write(struct tty *t, const char *b, size_t c) {
 }
 
 void tty_outputc(struct tty *t, char c) {
-  out_push(t, c);
+  //out_push(t, c);
   
   if((t->termios.c_oflag & OPOST) && (t->termios.c_oflag & ONLCR) && c == '\n') {
     ttydev_write(t, "\r", 1);

@@ -36,8 +36,8 @@ struct inode          rootnode;
 struct fat_inode_info rootinfo;
 
 extern struct super_block devblock;
-extern struct inode devnode;
-extern struct mount devmnt;
+extern struct inode       devnode;
+extern struct mount       devmnt;
 
 struct file_ops  fat_fops;
 struct inode_ops fat_iops;
@@ -83,7 +83,7 @@ void init_fs() {
   rootinfo.loc.dir_clust = 0;
   rootinfo.loc.offset    = 0;
 
-  rootnode.sb = &g_fat_sb;
+  rootnode.sb    = &g_fat_sb;
   rootnode.gid   = 0;
   rootnode.uid   = 0;
   rootnode.ino   = 0;
@@ -199,14 +199,44 @@ DIR *opendir_fat(struct inode *in) {
   if (!in || !S_ISDIR(in->mode))
     return NULL;
 
-  return (DIR *)-ENOSYS;
+  DIR             *d     = malloc(sizeof(DIR) * DT_MAXDIR);
+  struct direntry *dr    = get_addr(((struct fat_inode_info *)in->pdata)->first_clust);
+  uint16_t         clust = ((struct fat_inode_info *)in->pdata)->first_clust;
+  // printkf("entaddr: %x\n", dr);
+
+  int i;
+  for (i = 0; i < DT_MAXDIR; i++, dr++) {
+    if (!dr->fname[0])
+      break;
+    if ((uint8_t)dr->fname[0] == 0xe5)
+      continue;
+
+    d[i].size = dr->size;
+    // snprintkf(d[i].data, DIRENT_MAXSIZ, "% 8.8s % 3.3s", dr->fname, dr->ext);
+    d[i].type &= S_IFMT;
+    d[i].type |= dr->fatt & FAT_SUBDIR ? S_IFDIR : S_IFREG;
+
+    char buf[20];
+    fat2normal(dr->fname, dr->ext, buf);
+    strncpy(d[i].data, buf, sizeof buf);
+
+    d[i].in = iget(&g_fat_sb, clust << 16 | i * sizeof(d[0]));
+
+    if (!d[i].in) {
+      d[i].in = NULL;
+      printkf("unable to find %s\n", buf);
+      continue;
+    }
+  }
+  d[0].count = i;
+  return d;
 }
 
 int closedir_fat(struct inode *dir, DIR *d) {
   (void)dir;
 
   for (int i = 0; i < d->count; i++) {
-    d[i].in ? free(d[i].in) : (void)0;
+    d[i].in ? iput(d[i].in) : (void)0;
   }
 
   free(d);
@@ -260,12 +290,13 @@ fsino_t fat_lookup_from(const char *restrict path, const struct inode *restrict 
   char *tok = strtok_r(pth, "/", &sv);
 
   struct direntry *dr;
-  struct direntry *par;
   int              entries = 32;
   int              found   = 0;
   int              cluster = 0;
 
   fsino_t ret = -1;
+
+  cluster = ((struct fat_inode_info *)from->pdata)->first_clust;
 
   if (!from) {
     cluster = 0x7fffff00;
@@ -275,9 +306,11 @@ fsino_t fat_lookup_from(const char *restrict path, const struct inode *restrict 
   while (tok) {
     found = 0;
 
-    par = dr;
+    dr = get_addr(cluster);
+    /*
     if (cluster == 0) {
-      dr      = get_addr(((struct fat_inode_info *)from->pdata)->first_clust);
+      cluster = ((struct fat_inode_info *)from->pdata)->first_clust;
+      dr      = get_addr(cluster);
       entries = 32;
     } else if (cluster == 0x7fffff00) {
       entries = 32;
@@ -285,21 +318,24 @@ fsino_t fat_lookup_from(const char *restrict path, const struct inode *restrict 
       dr      = get_addr(cluster);
       entries = 1024 / sizeof(struct direntry);
     }
+    */
 
-    printkf("dir: %x\n", (char *)dr - 0x7c00);
+    // printkf("dir loc: %x\n", (char *)dr - 0x7c00);
     for (int i = 0; i < entries; i++) {
-      printkf("%s vs %s\n", dr[i].fname, tok);
+      // printkf("%s vs %s\n", dr[i].fname, tok);
       if (dr[i].fname[0] == 0x00)
         break;
       if ((uint8_t)dr[i].fname[0] == 0xE5)
         continue;
       if (fat_name_match(&dr[i], tok)) {
         found++;
+
+        // printkf("RET clust_par: %d off %d\n", cluster, i * sizeof(dr[0]));
+        ret = (cluster << 16) | ((uintptr_t)&dr[i] - (uintptr_t)dr);
+
         if (dr[i].fatt & FAT_SUBDIR) {
           cluster = dr[i].low_cluster;
         }
-
-        ret = (par->low_cluster << 16) | ((uintptr_t)&dr[i] - (uintptr_t)dr);
 
         break;
       }
@@ -333,10 +369,20 @@ mode_t get_mode(uint8_t fatt) {
 void fat_inoder(struct inode *r) {
   fsino_t           f   = r->ino;
   struct fat_dirloc loc = {.dir_clust = f >> 16, .offset = f & ((1 << 16) - 1)};
-  printkf("clust: %d off: %d\n", loc.dir_clust, loc.offset);
-  struct direntry  *d   = get_dirent(&loc);
+  // printkf("clust: %d off: %d\n", loc.dir_clust, loc.offset);
+  if (loc.dir_clust == 0 && loc.offset == 0) {
+    // printkf("root detected\n");
+    struct fat_inode_info *inf = malloc(sizeof(struct fat_inode_info));
+    memcpy(inf, &rootinfo, sizeof(*inf));
+    memcpy(r, &rootnode, sizeof(*r));
+    r->pdata = inf;
+    r->fops  = &fat_fops;
+    r->ops   = &fat_iops;
+    return;
+  }
+  struct direntry *d = get_dirent(&loc);
 
-  printkf("d: %p\n", (char *)d - 0x7c00);
+  // printkf("d: %p\n", (char *)d - 0x7c00);
 
   struct fat_inode_info *inf = malloc(sizeof(struct fat_inode_info));
   inf->attr                  = d->fatt;
@@ -348,6 +394,11 @@ void fat_inoder(struct inode *r) {
   r->ops   = &fat_iops;
   r->mode  = get_mode(d->fatt);
   r->pdata = inf;
+  r->size = d->size;
+}
+
+void fat_put_inode(struct inode *in) {
+  free(((struct fat_inode_info *)in->pdata));
 }
 
 struct inode_ops fat_iops = {
@@ -363,13 +414,14 @@ struct file_ops fat_fops = {
     .write = write_fat};
 
 struct super_ops fat_sops = {
-    .read_inode = fat_inoder};
+    .read_inode = fat_inoder,
+    .put_inode  = fat_put_inode};
 
 void set_special() {
   init_devs();
 
   fsino_t dev_fs = fat_lookup_from("dev", &rootnode);
-
+  // printkf("devfs ino: %d\n", dev_fs);
   struct inode *in = iget(&g_fat_sb, dev_fs);
   imount(in, &devmnt);
 }
@@ -414,6 +466,8 @@ int fat_read(struct inode *in, void *buf, size_t off, size_t count) {
   if (!in || !buf)
     return 0;
 
+  //if(off + count > in->size) return 0;
+  size_t siz = in->size;
   uint16_t cluster = ((struct fat_inode_info *)in->pdata)->first_clust;
   size_t   read    = 0;
 
@@ -423,11 +477,12 @@ int fat_read(struct inode *in, void *buf, size_t off, size_t count) {
   while (cluster < 0xff8) {
     void *addr = get_addr(cluster);
 
-    size_t dcount = 1024 - off;
-    dcount        = dcount > count ? count : dcount;
-
+    size_t dcount = MIN(siz, 1024) - off;
+    //dcount        = dcount > count ? count : dcount;
+    dcount = MIN(dcount, count);
+    //dcount = MIN(dcount, siz);
     // printkf("dcount: %d\n", dcount);
-
+    //printkf("%c\n", *(char*)((char *)addr + off));
     memcpy(buf, addr + off, dcount);
 
     if (dcount > count) {
@@ -436,6 +491,7 @@ int fat_read(struct inode *in, void *buf, size_t off, size_t count) {
     }
 
     count -= dcount;
+    siz -= dcount;
     read += dcount;
 
     off     = 0;

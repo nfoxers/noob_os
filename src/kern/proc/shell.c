@@ -22,6 +22,9 @@
 
 extern void enditall();
 
+extern int stdin;
+extern int stdout;
+
 void bf() {
 #define BF_BUFSIZ 128
   uint8_t dbuf[BF_BUFSIZ]; // data buffer
@@ -226,23 +229,13 @@ int c_cat(char **argv, int argc) {
     return 1;
   }
 
-  uint8_t *buf = malloc(1024);
-
-  // printkf("fd: %d\n\n", fd);
-
-  if (read(fd, (char *)buf, 1024) == -1) {
-    perror("cat: read");
-    if (close(fd) == -1)
-      perror("cat: close");
-    free(buf);
-    return 1;
+  int r = 0;
+  int c = 0;
+  while((r = read(fd, &c, 1)) == 1) {
+    if(write(stdout, &c, 1) == -1) perror("write");
   }
 
-  printkf("%.1024s", buf);
-
-  if (close(fd) == -1)
-    perror("cat: close2");
-  free(buf);
+  close(fd);
   return 0;
 }
 
@@ -274,6 +267,18 @@ int c_mused(char **argv, int argc) {
   printkf("used dynamic memory: %dB\n", getused());
   printkf("used dynamic memory max: %dB\n", getmaxused());
   printkf("used dynamic memory eff: %dB\n", gettrueused());
+  return 0;
+}
+
+int c_icach(char **argv, int argc) {
+  ARGS_USELESS;
+  print_caches();
+  return 0;
+}
+
+int c_ipurge(char **argv, int argc) {
+  ARGS_USELESS;
+  purge_lru();
   return 0;
 }
 
@@ -313,7 +318,7 @@ int c_exec(char **argv, int argc) {
 
 static char const *const cmds[] = {
     "help", "exit", "ls", "rm", "touch", "clear", "time", "bf", "lspci", "mkdir", "cd",
-    "cat", "mall", "h", "mused", "exec"};
+    "cat", "mall", "h", "mused", "icach", "ipurge", "exec"};
 
 int c_help(char **argv, int argc) {
   ARGS_USELESS;
@@ -329,7 +334,7 @@ int c_help(char **argv, int argc) {
 
 static int (*const ftab[])(char *argv[NARGS], int argc) = {
     c_help, c_exit, c_ls, c_rm, c_touch, c_clear, c_time, c_bf, c_lspci, c_mkdir, c_cd,
-    c_cat, c_mall, c_h, c_mused, c_exec};
+    c_cat, c_mall, c_h, c_mused, c_icach, c_ipurge, c_exec};
 
 void shell() {
   static char buf[128];

@@ -144,6 +144,7 @@ struct inode {
   struct mount       *mnt;
 
   struct hlist_node hnode;
+  struct list_head lru;
 
   void *pdata;
 };
@@ -183,6 +184,9 @@ void          iput(struct inode *in);
 void          imount(struct inode *in, struct mount *mnt);
 void          iadd(struct inode *in);
 
+void purge_lru();
+void print_caches();
+
 /* syscalls */
 
 ssize_t fsys_read(int fd, void *buf, size_t count);
@@ -203,5 +207,6 @@ void set_dev(struct super_block *b, struct inode *root);
 /* library functions */
 int lsdir(const char *path, int flg);
 int findfreefd();
+
 
 #endif

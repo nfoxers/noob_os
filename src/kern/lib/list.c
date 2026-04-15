@@ -30,6 +30,11 @@ void list_del(struct list_head *ent) {
   ent->prev = ent;
 }
 
+void list_move_front(struct list_head *thing, struct list_head *head) {
+  list_del(thing);
+  list_add(thing, head);
+}
+
 void hlist_add_head(struct hlist_node *new, struct hlist_head *head) {
   new->next = head->first;
   new->pprev = &head->first;
