@@ -17,7 +17,7 @@ int stdin;
 int stdout;
 
 const static cc_t	ttydefchars[NCCS] = {
-  CINTR, CQUIT, CERASE, CKILL, CEOF, CTIME, CMIN, 0, CSTART, CSTOP, CSUSP, CEOL,
+  CINTR, CQUIT, '\b', CKILL, CEOF, CTIME, CMIN, 0, CSTART, CSTOP, CSUSP, CEOL,
   CREPRINT, CDISCARD, CERASE, CLNEXT, CEOL
 };
 
@@ -107,6 +107,10 @@ void canon_tty(struct tty *tty, char c) {
 
     // todo : wakeup readers
   }
+
+  if(t->c_lflag & ECHO) {
+    tty_outputc(tty, c);
+  }
 }
 
 void tty_inputc(struct tty *t, char c) {
@@ -122,12 +126,14 @@ void tty_inputc(struct tty *t, char c) {
 
   if(tm->c_lflag & ICANON) {
     canon_tty(t, c);
+    return;
   } else {
     canon_push(t, c);
     // todo : wakeup readers
   }
 
   if(tm->c_lflag & ECHO) {
+
     tty_outputc(t, c);
   }
 }

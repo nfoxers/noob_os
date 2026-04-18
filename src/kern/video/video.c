@@ -1,6 +1,7 @@
 #include "video/video.h"
 #include "io.h"
 #include "mem/mem.h"
+#include "syscall/syscall.h"
 #include "video/printf.h"
 #include <stdint.h>
 
@@ -16,6 +17,7 @@ static uint8_t c_att = 0x00;
 static uint8_t vflag = 0;
 
 #define VF_ESCAPE 0x01
+#define VF_ADV 0x02
 
 #define V_MAXPAGE 2
 
@@ -55,8 +57,7 @@ void backspace() {
   setcursor();
 }
 
-void putchr(char c) {
-
+void _putchr(char c) {
   if (vflag & VF_ESCAPE) {
     // todo: proper ansi escape handling
     c_att = c;
@@ -95,6 +96,18 @@ void putchr(char c) {
 
   setcursor();
   //for(int i = 0; i < 100; i++)vflush();
+}
+
+void putchr(char c) {
+  if(vflag & VF_ADV) {
+    write(1, &c, 1);
+  } else {
+    _putchr(c);
+  }
+}
+
+void mkadv() {
+  vflag |= VF_ADV;
 }
 
 void printk(char *a) {

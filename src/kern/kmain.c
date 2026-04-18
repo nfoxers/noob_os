@@ -1,24 +1,28 @@
 #include "cpu/ccpu.h"
 #include "cpu/gdt.h"
 #include "cpu/idt.h"
+#include "crypt/blake2s.h"
+#include "crypt/crypt.h"
+#include "driver/keyboard.h"
+#include "driver/pci.h"
+#include "driver/serial.h"
+#include "driver/time.h"
 #include "driver/tty.h"
 #include "fs/devfs.h"
 #include "fs/fat12.h"
-#include "driver/keyboard.h"
-#include "driver/pci.h"
-#include "driver/time.h"
 #include "fs/vfs.h"
+#include "mem/acpi.h"
 #include "mem/mem.h"
 #include "mem/paging.h"
 #include "proc/proc.h"
+#include "proc/shell.h"
 #include "stdint.h"
+#include "syscall/syscall.h"
 #include "video/printf.h"
 #include "video/video.h"
-#include "proc/shell.h"
-#include <stdarg.h>
+#include <cpu/irq.h>
 #include <lib/errno.h>
-#include "driver/serial.h"
-#include "syscall/syscall.h"
+#include <stdarg.h>
 
 extern void enditall();
 
@@ -26,19 +30,19 @@ void setup() {
   zero_bss();
   kmalloc_init();
   init_video();
-  
+
   printkf("hello from C!\n");
   init_root_proc();
 
-  set_idtr();  
-  init_pic();
-
-
-  //init_rootfs(); 
-
   set_gdt();
+
+  set_idtr();
+  smbios_scan();
+  scan_acpi();  
+
   set_apic();
-  
+  ioapic_init();
+
   syscall_init();
 
   init_pit(1);
@@ -46,32 +50,47 @@ void setup() {
   init_serial(9600);
   fpu_init();
 
-  smbios_scan();
-
   page_init();
-
   init_fs();
-  
-  //init_devs();
+
+  // init_devs();
   init_kbd();
   init_tty();
 
+  //pic_disable();
+
+  mkadv();
 
   check_capat();
-  printk("time of boot: ");  
+  printk("time of boot: ");
   print_time();
 
-  printkf("used dynamic memory: %d KiB (%d B)\n", getused()/1024, getused());
+  printkf("used dynamic memory: %d KiB (%d B)\n", getused() / 1024, getused());
 }
+
+int checks() {
+  int fd = open("/etc", O_RDONLY);
+  if(fd == -1) {
+    perror("open /etc");
+    return -1;
+  }
+
+  close(fd);
+  return 0;
+};
 
 void kmain(void) {
   setup();
+  if(checks() == -1) {
+    printkf("some checks failed...\n");
+    while(1);
+  }
 
-  //printkf("stat for root: %d\n", chkcred("user", "toor"));
+  // printkf("stat for root: %d\n", chkcred("user", "toor"));
 
   // TODO: fork and execve
 
-  STI;  
+  STI;
   shell();
 
   enditall();

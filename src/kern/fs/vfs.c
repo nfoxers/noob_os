@@ -1,4 +1,5 @@
 #include "fs/vfs.h"
+#include "crypt/crypt.h"
 #include "lib/list.h"
 #include "mem/mem.h"
 #include "proc/proc.h"
@@ -207,9 +208,9 @@ void imount(struct inode *in, struct mount *mnt) {
 
 void purge_lru() {
   struct list_head *m = &ilru.lru;
-  while(m->next != m) {
-    struct list_head *k = m->next;
-    struct inode *in = container_of(k, struct inode, lru);
+  while (m->next != m) {
+    struct list_head *k  = m->next;
+    struct inode     *in = container_of(k, struct inode, lru);
     free_inode(in);
   }
 }
@@ -226,7 +227,8 @@ void print_caches() {
     }
     while (k) {
       struct inode *in = container_of(k, struct inode, hnode);
-      printkf("%d(%d).%d ", in->ino, in->sb->s_dev, in->refs);
+      printkf("%d@%d.", in->ino, in->sb->s_dev);
+      printkf("%d ", in->refs);
       k = k->next;
     }
     if (tmp)
@@ -236,14 +238,13 @@ void print_caches() {
   struct list_head *m = &ilru.lru;
   do {
     struct inode *in = container_of(m, struct inode, lru);
-    printkf("[%p]: %d(%d).%d\n", in, in->ino, in->dev, in->refs);
+    printkf("[%p]: %d@%d.%d\n", in, in->ino, in->dev, in->refs);
     m = m->next;
   } while (m != &ilru.lru);
-  printkf("\n");
 
   printkf("\nFILE DESCS\n");
-  for(size_t i = 0; i < sizeof(p_curproc->p_user->u_ofile)/sizeof(p_curproc->p_user->u_ofile[0]); i++) {
-    if(p_curproc->p_user->u_ofile[i]) {
+  for (size_t i = 0; i < sizeof(p_curproc->p_user->u_ofile) / sizeof(p_curproc->p_user->u_ofile[0]); i++) {
+    if (p_curproc->p_user->u_ofile[i]) {
       printkf("[%02d]: %p.%d\n", i, p_curproc->p_user->u_ofile[i]->inode, p_curproc->p_user->u_ofile[i]->refcont);
     }
   }

@@ -92,6 +92,15 @@ struct pci_hdr {
   } tsh; // "type specific header" lol
 } __attribute__((packed));
 
+/* things for msi-x */
+
+struct msix_entry {
+  uint32_t addr_lo;
+  uint32_t addr_high;
+  uint32_t data;
+  uint32_t vect_ctrl;
+} __attribute__((packed));
+
 void pci_enumerate();
 void pci_init();
 void setbit_cmd(uint8_t bit, uint32_t bus, uint32_t slot);

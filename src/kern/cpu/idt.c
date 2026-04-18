@@ -1,4 +1,5 @@
 #include "cpu/idt.h"
+#include "cpu/ccpu.h"
 #include "io.h"
 #include "video/printf.h"
 #include "video/video.h"
@@ -6,29 +7,6 @@
 #define EX   0x8E
 #define TR   0x8F
 #define EX_U 0xEE
-
-#define PIC1         0x20
-#define PIC2         0xA0
-#define PIC1_COMMAND PIC1
-#define PIC1_DATA    (PIC1 + 1)
-#define PIC2_COMMAND PIC2
-#define PIC2_DATA    (PIC2 + 1)
-
-#define PIC_EOI 0x20
-
-#define ICW1_ICW4      0x01
-#define ICW1_SINGLE    0x02
-#define ICW1_INTERVAL4 0x04
-#define ICW1_LEVEL     0x08
-#define ICW1_INIT      0x10
-
-#define ICW4_8086       0x01
-#define ICW4_AUTO       0x02
-#define ICW4_BUF_SLAVE  0x08
-#define ICW4_BUF_MASTER 0x0C
-#define ICW4_SFNM       0x10
-
-#define CASCADE_IRQ 2
 
 volatile struct idtr     idtr_s = {0};
 volatile struct idt_gate idt_g[50];
@@ -87,7 +65,6 @@ extern void _irq15(void);
 extern void _ex48(void);
 
 static isr_hand exception_hand[50] = {0};
-static isr_hand irq_hand[16]       = {0};
 
 static void set_g(void (*a)(void), uint8_t idx, uint8_t flg) {
   idt_g[idx].flag      = flg;
@@ -108,6 +85,8 @@ static void (*const itab[])(void) = {
   _ex48
 };
 
+
+
 void fill_idt() {
   for(uint32_t i = 0; i < sizeof(itab)/sizeof(itab[0]); i++) {
     set_g(itab[i], i, EX_U);
@@ -123,53 +102,6 @@ void set_idtr() {
 
   asm volatile("lidt (%0)" ::"r"(&idtr_s) : "memory");
   
-}
-
-void pic_sm(uint8_t line) {
-  if (line < 8) {
-    outb(PIC1_DATA, inb(PIC1_DATA) | (1 << line));
-    return;
-  }
-  outb(PIC2_DATA, inb(PIC2_DATA) | (1 << (line - 8)));
-}
-
-void pic_cm(uint8_t line) {
-  if (line < 8) {
-    outb(PIC1_DATA, inb(PIC1_DATA) & ~(1 << line));
-    return;
-  }
-  outb(PIC2_DATA, inb(PIC2_DATA) & ~(1 << (line - 8)));
-}
-
-void pic_eoi() { outb(PIC1_COMMAND, PIC_EOI); }
-void pic_eoi2() { outb(PIC2_COMMAND, PIC_EOI); outb(PIC1_COMMAND, PIC_EOI); }
-
-void pic_remap(int offset1, int offset2) {
-  outb(PIC1_COMMAND, ICW1_INIT | ICW1_ICW4);
-  io_wait();
-  outb(PIC2_COMMAND, ICW1_INIT | ICW1_ICW4);
-  io_wait();
-  outb(PIC1_DATA, offset1);
-  io_wait();
-  outb(PIC2_DATA, offset2);
-  io_wait();
-  outb(PIC1_DATA, 1 << CASCADE_IRQ);
-  io_wait();
-  outb(PIC2_DATA, 2);
-  io_wait();
-
-  outb(PIC1_DATA, ICW4_8086);
-  io_wait();
-  outb(PIC2_DATA, ICW4_8086);
-  io_wait();
-
-  outb(PIC1_DATA, 0xff); // disable irqs alltogether
-  outb(PIC2_DATA, 0xff);
-}
-
-void init_pic() {
-  print_init("pic", "initializing pic...", 0);
-  pic_remap(0x20, 0x28);
 }
 
 const char *excname[] = {
@@ -209,24 +141,6 @@ void isr_handler(struct regs *r) {
   return;
 }
 
-void irq_handler(struct regs *r) {
-  //printkf("irq exception %d\n", r->int_no - 32);
-
-  if (r->int_no < 32 || r->int_no >= 48)
-    return;
-  isr_hand e = irq_hand[r->int_no - 32];
-  if (!e) {
-    printk("no irq handler! unhandling irq...\n");
-    return;
-  }
-  e(r);
-  return;
-}
-
 void register_ex(isr_hand r, uint8_t no) {
   exception_hand[no] = r;
-}
-
-void register_irq(isr_hand r, uint8_t no) {
-  irq_hand[no] = r;
 }

@@ -2,10 +2,9 @@
 #define PROC_H
 
 #include "cpu/idt.h"
+#include "fs/vfs.h"
 #include "lib/list.h"
 #include "stdint.h"
-#include "fs/vfs.h"
-
 
 #define P_SFREE    0x00
 #define P_SSLEEP   0x01
@@ -14,22 +13,26 @@
 #define P_SSTOP    0x04
 #define P_SZOMB    0x05
 
-#define NOFILE 5
+#define NOFILE  5
 #define NGROUPS 5
+
+#define MAX_CMTLEN 32
 
 struct cred {
   uid_t uid, euid, suid;
   gid_t gid, egid, sgid;
 
   gid_t groups[NGROUPS];
-  int ngroups;
+  int   ngroups;
 };
 
 struct user {
+  char *name;
+
   char        *u_cdirname;
   struct inode u_cdir;
 
-  struct cred cred;
+  struct cred  cred;
   struct file *u_ofile[NOFILE];
 };
 
@@ -49,7 +52,7 @@ struct proc {
   uint32_t p_addr;
   uint32_t p_size;
 
-  struct list_head p_runn; // run node
+  struct list_head p_runn;  // run node
   struct list_head p_waitn; // wait node
 
   volatile struct context con;
@@ -67,6 +70,19 @@ struct run_queue {
   struct list_head head;
 };
 
+#define UI_ALLOCATED 0x80
+
+struct userinfo {
+  char  username[MAX_CMTLEN];
+  uid_t uid;
+  gid_t gid;
+  char  comment[MAX_CMTLEN];
+  char  home[MAX_CMTLEN];
+  char  interp[MAX_CMTLEN];
+
+  uint8_t pass_req;
+};
+
 extern struct proc *volatile p_curproc;
 
 void general_switch();
@@ -74,18 +90,13 @@ void schedule();
 
 struct proc *alloc_proc(void (*f)(), uint16_t cs, void *args);
 
+void login();
 void init_root_proc();
+
+const char *gethostname();
 
 void spawn_proc(void (*f)(), uint16_t cs, void *args);
 void exit_cur();
 
-/* crypt.c */
-
-uint32_t murmur3(const uint8_t *key, size_t len, uint32_t seed);
-int getuser(uid_t uid, char *buf);
-
-int chkcred(const char *usr, const char *cred);
-
-uint32_t murmur3(const uint8_t *key, size_t len, uint32_t seed);
 
 #endif

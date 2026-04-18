@@ -8,6 +8,7 @@
 #include "io.h"
 #include "video/printf.h"
 #include "video/video.h"
+#include <cpu/irq.h>
 #include <mem/mem.h>
 
 static uint32_t sfreq;
@@ -27,7 +28,7 @@ static void serial_isr(struct regs *r) {
     tty_inputc(&uartty, c);
   }
 
-  pic_eoi();
+  general_eoi();
 }
 
 char s_getchr() {
@@ -71,7 +72,7 @@ void update_serial(struct tty *tty) {
   n |= siz;
   outb(COM1 + UART_LCTRL, n);
 
-  // todo: things
+  // todo: things (speed, etc)
 }
 
 struct tty_ops stty_ops = {
@@ -136,9 +137,9 @@ uint32_t init_serial(uint32_t freq) {
 
   outb(COM1 + UART_INT, INT_RXAVAIL);
 
-  register_irq(serial_isr, 4);
+  register_irq(serial_isr, 4, "serial");
 
-  pic_cm(4);
+  // pic_cm(4);
   print_init("srl", "initializing serial...", 0);
   return 0;
 }

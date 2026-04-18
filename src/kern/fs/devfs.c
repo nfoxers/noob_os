@@ -7,6 +7,7 @@
 #include "video/printf.h"
 #include <stddef.h>
 #include <stdint.h>
+#include "crypt/crypt.h"
 
 #define MAXMAJ 5
 #define MAXMIN 5
@@ -72,7 +73,7 @@ struct inode *creat_devfs(const char *name, struct device *dev, uint16_t maj, ui
   in->pdata = didx;
   dev->idx = didx;
   dir_add(&devfs_root, name, in);
-  iadd(in);
+  //iadd(in);
   return in;
 }
 
@@ -151,8 +152,9 @@ void dev_inoder(struct inode *in) {
   }
   for(int i = 0; i < 16; i++) {
     struct inode *n = devfs_root.entry[i].in;
-    if(n->ino == in->ino) {
+    if(n && n->ino == in->ino) {
         memcpy(in, n, sizeof(*n));
+        break;
     }
   }
 } 
@@ -175,11 +177,23 @@ struct super_ops dev_sops = {
 /* some kind of inits */
 
 ssize_t read_null(struct device *d, void *buf, size_t count) {
-  if(d->idx->min == 0) {
+  //printkf("min: %d\n", d->idx->min);
+  if(d->idx->min == 1) {
     return 0;
   }
-  if(d->idx->min == 1) {
+  if(d->idx->min == 2) {
     memset(buf, 0, count);
+    return count;
+  }
+  if(d->idx->min == 3) {
+    size_t siz = count;
+    size_t off = 0;
+    while(siz > 4) {
+      get_rand((uint8_t *)buf + off, 4);
+      siz -= 4;
+      off += 4;
+    }
+    get_rand((uint8_t *)buf + off, siz);
     return count;
   }
   return 0;
@@ -198,6 +212,18 @@ struct device nulldev = {
          .read = read_null,
         .write=write_null}};
 
+struct device zerodev = {
+    .name = "zero dev",
+    .ops  = {
+         .read = read_null,
+        .write=write_null}};
+
+struct device randdev = {
+    .name = "rand dev",
+    .ops  = {
+         .read = read_null,
+        .write=write_null}};
+
 void init_devs() {
   devmnt.sb = &devblock;
 
@@ -212,7 +238,8 @@ void init_devs() {
   set_dev(&devblock, &devnode);
 
   creat_devfs("null", &nulldev, 0, 1);
-  creat_devfs("zero", &nulldev, 0, 2);
+  creat_devfs("zero", &zerodev, 0, 2);
+  creat_devfs("random", &randdev, 0, 3);
 }
 
 /* syscall abstraction */

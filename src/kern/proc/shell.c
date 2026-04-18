@@ -1,5 +1,6 @@
 #include "cpu/gdt.h"
 #include "cpu/idt.h"
+#include "cpu/irq.h"
 #include "driver/keyboard.h"
 #include "driver/pci.h"
 #include "driver/time.h"
@@ -217,13 +218,8 @@ int c_cd(char **argv, int argc) {
   return 0;
 }
 
-int c_cat(char **argv, int argc) {
-  if (argc == 1) {
-    printkf("specify your file please good sir\n");
-    return 2;
-  }
-
-  int fd = open(argv[1], O_RDONLY);
+int printfile(const char *file) {
+  int fd = open(file, O_RDONLY);
   if (fd == -1) {
     perror("cat: open");
     return 1;
@@ -237,6 +233,15 @@ int c_cat(char **argv, int argc) {
 
   close(fd);
   return 0;
+}
+
+int c_cat(char **argv, int argc) {
+  if (argc == 1) {
+    printkf("specify your file please good sir\n");
+    return 2;
+  }
+
+  return printfile(argv[1]);
 }
 
 int c_mall(char **argv, int argc) {
@@ -282,6 +287,12 @@ int c_ipurge(char **argv, int argc) {
   return 0;
 }
 
+int c_lsirq(char **argv, int argc) {
+  ARGS_USELESS;
+  show_interrupts();
+  return 0;
+}
+
 #define LDADDR 0x00
 
 int c_exec(char **argv, int argc) {
@@ -318,7 +329,7 @@ int c_exec(char **argv, int argc) {
 
 static char const *const cmds[] = {
     "help", "exit", "ls", "rm", "touch", "clear", "time", "bf", "lspci", "mkdir", "cd",
-    "cat", "mall", "h", "mused", "icach", "ipurge", "exec"};
+    "cat", "mall", "h", "mused", "icach", "ipurge", "lsirq", "exec"};
 
 int c_help(char **argv, int argc) {
   ARGS_USELESS;
@@ -334,16 +345,23 @@ int c_help(char **argv, int argc) {
 
 static int (*const ftab[])(char *argv[NARGS], int argc) = {
     c_help, c_exit, c_ls, c_rm, c_touch, c_clear, c_time, c_bf, c_lspci, c_mkdir, c_cd,
-    c_cat, c_mall, c_h, c_mused, c_icach, c_ipurge, c_exec};
+    c_cat, c_mall, c_h, c_mused, c_icach, c_ipurge, c_lsirq, c_exec};
 
 void shell() {
+  printkf("note: creds are root/toor or user w no pass\n");
+  login();
+  printk("\e\x07");
+  printfile("/etc/motd");
+
+  const char *hostname = gethostname();
+
   static char buf[128];
 
   kassert(sizeof(ftab) / sizeof(ftab[0]) != sizeof(cmds) / sizeof(cmds[0]));
 
   STI; // enable the keyboard an dstuff
   while (1) {
-    printkf("root@root:%s$ ", p_curproc->p_user->u_cdirname);
+    printkf("\e\x02%s@%s\e\x07:\e\x03%s\e\x07$ ", p_curproc->p_user->name, hostname, p_curproc->p_user->u_cdirname);
     int rd = kgets(buf, sizeof buf);
     // putchr('\n');
 

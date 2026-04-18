@@ -391,6 +391,22 @@ void free(void *ptr) {
   km_free(&kalloc, ptr);
 }
 
+void *realloc(void *ptr, size_t size) {
+  if(!ptr) {
+    return malloc(size);
+  }
+
+  if(!size) {
+    if(ptr) free(ptr);
+    return NULL;
+  }
+
+  void *new = malloc(size);
+  memcpy(new, ptr, size);
+  free(ptr);
+  return new;
+}
+
 void *malloc_align(size_t siz, size_t align) {
   if ((align & (align - 1)) != 0)
     return NULL;

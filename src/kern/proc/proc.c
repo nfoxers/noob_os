@@ -1,12 +1,18 @@
 #include "proc/proc.h"
+#include "ams/termbits.h"
 #include "cpu/gdt.h"
 #include "cpu/idt.h"
 #include "cpu/spinlock.h"
+#include "driver/keyboard.h"
+#include "driver/tty.h"
 #include "fs/vfs.h"
 #include "lib/list.h"
 #include "mem/mem.h"
 #include "video/printf.h"
 #include "syscall/syscall.h"
+#include <lib/errno.h>
+#include "crypt/crypt.h"
+#include "video/video.h"
 
 #define NOPROC 10
 
@@ -18,13 +24,9 @@ struct user root;
 
 struct proc *volatile p_curproc;
 
-struct proc *run_head;
-
-struct inode root_dir;
-
-extern struct file root_fd[NOFILE];
-
 struct run_queue rq;
+
+#define MAXUSERLEN 32
 
 #define STACKSIZ 512 // this'll be enough
 
@@ -54,38 +56,6 @@ volatile struct proc *find_freeproc() {
   }
   return NULL;
 }
-/*
-void rq_add(struct proc *p) {
-  if (!run_head) {
-    run_head  = p;
-    p->p_next = p;
-    p->p_prev = p;
-    return;
-  }
-
-  struct proc *tail = run_head->p_prev;
-  tail->p_next      = p;
-  p->p_prev         = tail;
-
-  p->p_next        = run_head;
-  run_head->p_prev = p;
-}
-
-void rq_remove(struct proc *p) {
-  if (p->p_next == p) {
-    run_head = NULL;
-  } else {
-    p->p_prev->p_next = p->p_next;
-    p->p_next->p_prev = p->p_prev;
-
-    if (run_head == p)
-      run_head = p->p_next;
-  }
-
-  p->p_next = NULL;
-  p->p_prev = NULL;
-}
-*/
 
 void enqueque_runqueue(struct run_queue *rq, struct proc *p) {
   list_add_tail(&p->p_runn, &rq->head);
@@ -208,19 +178,6 @@ static void task_switch(struct proc *next) {
 }
 
 void schedule() {
-  /*
-  struct proc *next = NULL;
-  if (!run_head)
-    return;
-
-  if (!p_curproc) {
-    next = run_head;
-    p_curproc  = run_head;
-  } else if (p_curproc == p_curproc->p_next)
-    return;
-  next = p_curproc->p_next;
-  */
-
   struct proc *prev = p_curproc;
   struct proc *next = proc_next(&rq);
 
@@ -250,6 +207,91 @@ void spawn_proc(void (*f)(), uint16_t cs, void *args) {
   STI;
 }
 
+const char *gethostname() {
+  static char buf[32];
+  static char evoked = 0;
+
+  if(evoked) return buf;
+
+  int tmp = open("/etc/hostname", O_RDONLY);
+  if(tmp == -1) {
+    perror("open");
+    return NULL;
+  }
+  read(tmp, buf, 32);
+  for(int i = 0; i < 32; i++) {
+    if(buf[i] == '\n') buf[i] = 0;
+  }
+
+  close(tmp);
+  evoked++;
+  return buf;
+}
+
+void login() {
+  int nologin = 0;
+
+  if(nologin) {
+    strcpy(root.name, "root");
+    strcpy(root.u_cdirname, "/home");
+    root.cred.euid = 0;
+    root.cred.egid = 0;
+    goto done;
+  } else {
+    printkf("\n");
+
+    loop:;
+    char buf[MAXUSERLEN];
+    char psw[MAXUSERLEN];
+
+    struct userinfo *i = malloc(sizeof(*i));
+    
+    const char *hostname = gethostname();
+    printkf("%s login: ", hostname);
+    kgets(buf, MAXUSERLEN);
+
+    int r = getuser(buf, 0, i);
+    if(r && !(i->pass_req & 1)) goto yes;
+
+    struct termios t;
+    tcgetattr(0, &t);
+    t.c_lflag &= ~(ECHO);
+    tcsetattr(0, TCSANOW, &t);
+
+    printkf("password for %s: ", buf);
+    kgets(psw, MAXUSERLEN);
+
+    t.c_lflag |= ECHO;
+    tcsetattr(0, TCSANOW, &t);
+
+    r = chkcred(buf, psw, i);
+    if(r == 0) {
+      printkf("\nlogin incorrect\n");
+      free(i);
+      goto loop;
+    }
+    
+    yes:
+    strcpy(root.name, i->username);
+
+    root.cred.euid = i->uid;
+    root.cred.egid = i->gid;
+
+    free(i);
+
+    printk("\n\n");
+
+    if(chdir(i->home) == -1) {
+      perror("home directory");
+      chdir("/");
+    }
+  }
+
+  done:
+  //printkf("\nlogged as %s\n\n", root.name);
+  return;
+}
+
 void init_root_proc() {
   init_list(&rq.head);
 
@@ -265,7 +307,8 @@ void init_root_proc() {
   root.cred.egid  = 0;
   root.cred.euid  = 0;
   root.u_cdirname = malloc(CWD_MAXSIZ);
-  strcpy(root.u_cdirname, "/home/");
+  root.name = malloc(MAXUSERLEN);
+  strcpy(root.u_cdirname, "/");
   // cdir will handled by fs
 
   //register_ex(sys_yield, SYS_INTNO);

@@ -1,9 +1,30 @@
 #include "driver/pci.h"
 #include "io.h"
+#include "lib/list.h"
 #include "video/printf.h"
 // #include "video/video.h"
 #include <stddef.h>
 #include <stdint.h>
+#include "mem/mem.h"
+
+struct pcidev {
+  struct pci_hdr *hdr;
+  uint32_t id;
+  uint32_t loc;
+  uint8_t func;
+
+  struct msix_entry *entries;
+
+  struct list_head node;
+};
+
+struct pcidev pcihead;
+
+uint32_t pci_readl(uint32_t bus, uint32_t slot, uint32_t func, uint8_t off) {
+  uint32_t addr = (bus << 16) | (slot << 11) | (func << 8) | (off & 0xFC) | ((uint32_t)0x80000000);
+  outl(PCI_CFG_ADDR, addr);
+  return inl(PCI_CFG_DATA);
+}
 
 uint16_t pci_readw(uint32_t bus, uint32_t slot, uint32_t func, uint8_t off) {
   uint32_t addr = (bus << 16) | (slot << 11) | (func << 8) | (off & 0xFC) | ((uint32_t)0x80000000);
@@ -12,16 +33,37 @@ uint16_t pci_readw(uint32_t bus, uint32_t slot, uint32_t func, uint8_t off) {
   return tmp;
 }
 
-uint32_t pci_readl(uint32_t bus, uint32_t slot, uint32_t func, uint8_t off) {
-  uint32_t addr = (bus << 16) | (slot << 11) | (func << 8) | (off & 0xFC) | ((uint32_t)0x80000000);
-  outl(PCI_CFG_ADDR, addr);
-  return inl(PCI_CFG_DATA);
+uint8_t pci_readb(uint32_t bus, uint32_t slot, uint32_t func, uint8_t off) {
+  uint8_t align = off & ~3;
+  uint32_t v = pci_readl(bus, slot, func, align);
+
+  return (v >> ((off & 3) * 8)) & 0xff;
 }
 
 void pci_writel(uint32_t bus, uint32_t slot, uint32_t func, uint32_t off, uint32_t data) {
   uint32_t addr = (bus << 16) | (slot << 11) | (func << 8) | (off & 0xFC) | ((uint32_t)0x80000000);
   outl(PCI_CFG_ADDR, addr);
   outl(PCI_CFG_DATA, data);
+}
+
+void pci_writew(uint32_t bus, uint32_t slot, uint32_t func, uint32_t off, uint16_t data) {
+  uint32_t align = off & ~3;
+  uint32_t o = pci_readl(bus, slot, func, align);
+  uint8_t shift = (off & 2) * 8;
+  uint32_t mask = 0xffff << shift;
+  uint32_t new = (o & mask) | ((uint32_t)data << shift);
+
+  pci_writel(bus, slot, func, align, new);
+}
+
+void pci_writeb(uint32_t bus, uint32_t slot, uint32_t func, uint32_t off, uint8_t data) {
+  uint32_t align = off & ~3;
+  uint32_t o = pci_readl(bus, slot, func, align);
+  uint8_t shift = (off & 3) * 8;
+  uint32_t mask = 0xff << shift;
+  uint32_t new = (o & mask) | ((uint32_t)data << shift);
+
+  pci_writel(bus, slot, func, align, new);
 }
 
 uint16_t rdvendor(uint32_t bus, uint32_t slot) {
@@ -90,36 +132,20 @@ const char *classcode(uint8_t code) {
 }
 
 void pci_enumerate() {
-  uint32_t bus = 0;
-loop:
-  for (uint32_t dev = 0; dev < 32; dev++) {
-    for (uint32_t func = 0; func < 8; func++) {
-      uint32_t id = pci_readl(bus, dev, func, 0);
-      if (id != 0xffffffff) {
-        uint32_t reg = pci_readl(bus, dev, func, 0x08);
+  struct list_head *head = &pcihead.node;
+  if(head->next == head) return;
+  head = head->next;
+  while(head != &pcihead.node) {
 
-        printkf("%02x:%02x.%x ", bus, dev, func);
-        printkf("%s: ", classcode((reg >> 24) & 0xff));
-        printkf("vendor=%04x device=%04x ", id & 0xffff, id >> 16);
-        printkf("class=%04x subclass=%04x\n", (reg >> 24) & 0xff, (reg >> 16) & 0xff);
+    struct pcidev *d = container_of(head, struct pcidev, node);
 
-        uint32_t k   = pci_readl(bus, dev, func, 0xc);
-        uint8_t  hdr = (k >> 16);
+    printkf("%02x:%02x.%x ", d->loc >> 16, d->loc & 0xffff, d->func);
+    printkf("%s: ", classcode(d->hdr->common.clas));
+    printkf("vendor=%04x device=%04x ", d->id & 0xffff, d->id >> 16);
+    printkf("class=%04x subclass=%04x\n", d->hdr->common.clas, d->hdr->common.subclass);
 
-        if ((hdr & 0x7f) == 0x1) {
-          struct pci_hdr a;
-          pci_readall(&a, bus, dev, func);
-          bus = a.tsh.bridge.ss_busnum;
-          goto loop;
-        }
 
-        if (func == 0) {
-          if (!(hdr & 0x80)) {
-            break;
-          }
-        }
-      }
-    }
+    head = head->next;
   }
 }
 
@@ -128,19 +154,57 @@ void rtl8139_init(struct pci_hdr *hdr, uint32_t bus, uint32_t dev);
 void pci_init() {
   print_init("pci", "initializing pci devices...", 0);
 
+  init_list(&pcihead.node);
+
   uint32_t bus = 0;
 loop:
   for (uint32_t dev = 0; dev < 32; dev++) {
     for (uint32_t func = 0; func < 8; func++) {
       uint32_t id = pci_readl(bus, dev, func, 0);
       if (id != 0xffffffff) {
+        struct pci_hdr *h = malloc(sizeof(*h));
+        pci_readall(h, bus, dev, 0);
 
-        if (id == 0x813910ec) {
-          struct pci_hdr h;
-          pci_readall(&h, bus, dev, 0);
-          rtl8139_init(&h, bus, dev);
+        struct pcidev *pdev = malloc(sizeof(*pdev));
+        pdev->hdr = h;
+        pdev->loc = bus << 16 | dev;
+        pdev->id = id;
+        pdev->func = func;
+        pdev->entries = 0;
+        list_add(&pdev->node, &pcihead.node);
+
+        uint16_t stat = h->tsh.dev.capptr;
+        if(stat & (1 << 4)) {
+          // dev has capabilities, check for MSI-X
+
+          uint8_t cap = pci_readb(bus, dev, func, 0x34);
+          while(cap) {
+            uint8_t cap_id = pci_readb(bus, dev, func, cap);
+            uint8_t next = pci_readb(bus, dev, func, cap + 1);
+
+            if(cap_id == 0x05) { // MSI unused
+              //printkf("msi\n");
+            } else if(cap_id == 0x11) { // MSI-X
+              //printkf("msi-x\n");
+              //uint16_t cont = pci_readw(bus, dev, func, cap + 2);
+              uint32_t table = pci_readl(bus, dev, func, cap + 4);
+              //uint32_t pba = pci_readl(bus, dev, func, cap + 8);
+
+              uint8_t bir = table & 0x7;
+              uint32_t off = table & ~0x7;
+
+              uint32_t bar_addr = h->tsh.dev.bar[bir];
+              //printkf("bar: %x + %x\n", bar_addr, off);
+              pdev->entries = (void *)(bar_addr + off);
+
+              // todo: configure msi-x
+            }
+
+            cap = next;
+          }
         }
 
+        // todo: remove this
         uint32_t k   = pci_readl(bus, dev, func, 0xc);
         uint8_t  hdr = (k >> 16);
 

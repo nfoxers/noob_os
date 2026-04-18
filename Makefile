@@ -21,29 +21,21 @@ OBJu = $(patsubst ./user/%.c,./build/user/%.o, $(SRCu))
 
 DEP := $(OBJ:.o=.d) $(OBJu:.o=.d)
 
+DATA := $(shell find ./data)
+
 .PHONY: clean run debug size size2
 
 all: bin/os.img size
 
-bin/os.img: build/boot.bin build/kern.bin build/user.bin
+bin/os.img: build/boot.bin build/kern.bin build/user.bin $(DATA) Makefile
 	@mkdir -p bin
 	cp $< $@
 	truncate $@ -s 320K
 	mcopy -i $@ build/kern.bin ::kernel.bin
 
-	mmd -i $@ ::home
-	mmd -i $@ ::bin
-	mmd -i $@ ::etc
-	mmd -i $@ ::tmp
-	mmd -i $@ ::var
 	mmd -i $@ ::dev
+	mcopy -i $@ -s data/* ::
 
-	mcopy -i $@ data/passwd ::etc/passwd
-	mcopy -i $@ data/shadow ::etc/shadow
-
-	mcopy -i $@ data/data.txt ::home/data.txt
-	mmd -i $@ ::home/tdir
-	mcopy -i $@ data/data.txt ::home/tdir/data.txt
 	mcopy -i $@ build/user.bin ::home/user.bin
 
 build/boot.bin: src/boot/boot.asm
@@ -76,6 +68,10 @@ build/%.o: src/%.asm
 
 -include $(DEP)
 
+bin/disk.img: tools/mkdisk.sh
+	chmod +x $<
+	./$<
+
 clean:
 	rm -rf build bin
 
@@ -84,6 +80,9 @@ run: bin/os.img
 	
 debug: bin/os.img
 	qemu-system-i386 -s -S $(QMFLAGS) -drive format=raw,file=$<
+
+rundsk: bin/os.img bin/disk.img
+	qemu-system-i386 $(QMFLAGS) -drive format=raw,file=$< -drive format=raw,file=bin/disk.img,if=virtio
 
 size: tools/chksiz.py
 	@echo --------------

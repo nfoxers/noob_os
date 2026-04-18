@@ -16,7 +16,19 @@ void check_capat();
 void rdmsr(uint32_t msr, uint32_t *lo, uint32_t *hi);
 void wrmsr(uint32_t msr, uint32_t lo, uint32_t hi);
 
-void set_apic();
+
 void fpu_init();
+
+/* apic.c */
+
+void set_apic();
+void parse_madt();
+void ioapic_init();
+void lapic_eoi();
+
+int irq2gsi(int irq);
+int irq2flg(int irq);
+
+void ioapic_set_irq(int irq, int vect);
 
 #endif

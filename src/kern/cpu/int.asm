@@ -116,11 +116,11 @@ sys_stub:
   add esp, 8
   iret
 
-extern pic_eoi
+extern general_eoi
 global childret
 childret:
   push dword 0
-  call pic_eoi
+  call general_eoi
   add esp, 4
   sti
   jmp intret

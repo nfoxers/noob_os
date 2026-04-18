@@ -1,4 +1,5 @@
 #include "driver/keyboard.h"
+#include "ams/ioctls.h"
 #include "ams/termbits.h"
 #include "driver/serial.h"
 #include "cpu/idt.h"
@@ -12,7 +13,7 @@
 #include <mem/mem.h>
 #include "syscall/syscall.h"
 #include "lib/errno.h"
-
+#include <cpu/irq.h>
 
 #define K_SPECIAl 0xe0
 
@@ -153,13 +154,15 @@ static void kbd_handler(struct regs *r) {
     tty_inputc(&ctty, ch);
   }
 
-  pic_eoi();
+  general_eoi();
 }
+
+extern void _putchr(char c);
 
 ssize_t console_ttywrite(struct tty *t, const char *buf, size_t c) {
   (void)t;
   for(size_t i = 0; i < c; i++) {
-    putchr(buf[i]);
+    _putchr(buf[i]);
   }
   return c;
 }
@@ -175,7 +178,7 @@ void init_tty() {
   memcpy(&ctty, t, sizeof(*t));
   free(t);
 
-  ctty.termios.c_lflag &= ~(ECHO | ICANON);
+  //ctty.termios.c_lflag &= ~(ECHO | ICANON);
 
   struct device *d = alloc_ttydev(&ctty);
   memcpy(&cdev, d, sizeof(*d));
@@ -196,6 +199,9 @@ void init_tty() {
     perror("tty: open2");
     return;
   }
+
+  
+  //printkf("stdin: %d stdout: %d\n", stdin, stdout);
 }
 
 void init_ps2() {
@@ -228,8 +234,8 @@ void init_ps2() {
 
 int init_kbd() {
   init_ps2();
-  register_irq(kbd_handler, 1);
-  pic_cm(1);
+  register_irq(kbd_handler, 1, "i8042");
+  // pic_cm(1);
   print_init("kbd", "intializing the keyboard...", 0);
   return 0;
 }
@@ -259,13 +265,13 @@ int kgets(char *s, uint16_t siz) {
       break;
     if (c != '\b') {
       s[idx++] = c;
-      putchr(c);
+      //putchr(c);
     } else if (c == '\b' && idx > 0) {
-      putchr('\b');
+      //putchr('\b');
       idx--;
     }
   }
-  putchr('\n');
+  //putchr('\n');
   s[idx] = 0;
   return idx;
 }

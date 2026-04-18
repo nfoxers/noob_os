@@ -1,9 +1,11 @@
 #include "ams/sys/types.h"
-#include "proc/proc.h"
 #include "lib/errno.h"
-#include "syscall/syscall.h"
 #include "mem/mem.h"
+#include "proc/proc.h"
+#include "syscall/syscall.h"
 #include "video/printf.h"
+
+/* murmus */
 
 static uint32_t murmur_scramble(uint32_t k) {
   k *= 0xcc9e2d51;
@@ -15,7 +17,7 @@ static uint32_t murmur_scramble(uint32_t k) {
 uint32_t murmur3(const uint8_t *key, size_t len, uint32_t seed) {
   uint32_t h = seed;
   uint32_t k;
-  for(size_t i = len >> 2; i; i--) {
+  for (size_t i = len >> 2; i; i--) {
     memcpy(&k, key, sizeof(uint32_t));
     key += sizeof(uint32_t);
     h ^= murmur_scramble(k);
@@ -24,7 +26,7 @@ uint32_t murmur3(const uint8_t *key, size_t len, uint32_t seed) {
   }
 
   k = 0;
-  for(size_t i = len % 3; i; i--) {
+  for (size_t i = len % 3; i; i--) {
     k <<= 8;
     k |= key[i - 1];
   }
@@ -54,7 +56,7 @@ int sys_setuid(uid_t uid) {
 
 int sys_seteuid(uid_t uid) {
   struct cred *p = &p_curproc->p_user->cred;
-  if(p->euid == 0 || p->uid == uid || p->suid == uid) {
+  if (p->euid == 0 || p->uid == uid || p->suid == uid) {
     p->euid = uid;
     return 0;
   }
@@ -62,98 +64,18 @@ int sys_seteuid(uid_t uid) {
 }
 
 #define GETUSER_BUFSIZ 1024
-int getuser(uid_t uid, char *buf) {
+int getuser(const char *uname, uid_t uid, struct userinfo *info) {
+  info->pass_req = UI_ALLOCATED;
+
   int fd = open("/etc/passwd", O_RDONLY);
-  if(fd == -1) {
-    perror("getuser: open");
-    return 1;
-  }
-
-  char *b = malloc(GETUSER_BUFSIZ);
-
-  if(read(fd, b, GETUSER_BUFSIZ) == -1) {
-    perror("getuser: read");
-    free(b);
-    close(fd);
-  }
-
-  char *linesav;
-  char *line = strtok_r(b, "\n", &linesav);
-  while(line) {
-
-    char *fieldsav = 0;
-    char *name = strtok_r(line, ":", &fieldsav);
-    strtok_r(NULL, ":", &fieldsav);
-    char *field = strtok_r(NULL, ":", &fieldsav);
-
-    int id = atoi(field);
-    if(id == (int)uid) {
-      strcpy(buf, name);
-    }
-
-    line = strtok_r(NULL, "\n", &linesav);
-  }
-
-  free(b);
-  if(close(fd) == -1) {
-    perror("getuser: close");
-    return 1;
-  }
-  return 0;
-}
-
-uid_t getuid(const char *usr) {
-  int fd = open("/etc/passwd", O_RDONLY);
-  if(fd == -1) {
-    perror("getuser: open");
-    return -1;
-  }
-
-  char *b = malloc(GETUSER_BUFSIZ);
-
-  if(read(fd, b, GETUSER_BUFSIZ) == -1) {
-    perror("getuser: read");
-    free(b);
-    close(fd);
-  }
-
-  uid_t uid = -1;
-
-  char *linesav;
-  char *line = strtok_r(b, "\n", &linesav);
-  while(line) {
-
-    char *fieldsav = 0;
-    char *name = strtok_r(line, ":", &fieldsav);
-    strtok_r(NULL, ":", &fieldsav);
-    char *field = strtok_r(NULL, ":", &fieldsav);
-
-    int id = atoi(field);
-    if(!strcmp(name, usr)) {
-      uid = id;
-    }
-
-    line = strtok_r(NULL, "\n", &linesav);
-  }
-
-  free(b);
-  if(close(fd) == -1) {
-    perror("getuser: close");
-    return -1;
-  }
-  return uid;
-}
-
-int chkcred(const char *usr, const char *cred) {
-  int fd = open("/etc/shadow", O_RDONLY);
-  if(fd == -1) {
+  if (fd == -1) {
     perror("getuser: open");
     return 0;
   }
 
   char *b = malloc(GETUSER_BUFSIZ);
 
-  if(read(fd, b, GETUSER_BUFSIZ) == -1) {
+  if (read(fd, b, GETUSER_BUFSIZ) == -1) {
     perror("getuser: read");
     free(b);
     close(fd);
@@ -162,25 +84,135 @@ int chkcred(const char *usr, const char *cred) {
   int stat = 0;
   char *linesav;
   char *line = strtok_r(b, "\n", &linesav);
-  while(line) {
+  while (line) {
 
     char *fieldsav = 0;
-    char *name = strtok_r(line, ":", &fieldsav);
+    char *name     = strtok_r(line, ":", &fieldsav);
     char *pass = strtok_r(NULL, ":", &fieldsav);
+    char *id_s = strtok_r(NULL, ":", &fieldsav);
 
-    if(!strcmp(name, usr)) {
+    char *gid_s = strtok_r(NULL, ":", &fieldsav);
+    char *cmt   = strtok_r(NULL, ":", &fieldsav);
+    char *home  = strtok_r(NULL, ":", &fieldsav);
+    char *intp  = strtok_r(NULL, ":", &fieldsav);
+
+    int id  = atoi(id_s);
+    int gid = atoi(gid_s);
+    if ((!uname && (id == (int)uid)) || !strcmp(name, uname)) {
+      strncpy(info->username, name, MAX_CMTLEN);
+      strncpy(info->comment, cmt, MAX_CMTLEN);
+      strncpy(info->home, home, MAX_CMTLEN);
+      strncpy(info->interp, intp, MAX_CMTLEN);
+
+      info->uid = id;
+      info->gid = gid;
+      info->pass_req = (*pass == 'x' ? 1 : 0) | UI_ALLOCATED;
+
+      stat++;
+      break;
+    }
+
+    line = strtok_r(NULL, "\n", &linesav);
+  }
+
+  free(b);
+  if (close(fd) == -1) {
+    perror("getuser: close");
+    return 0;
+  }
+
+  return stat;
+}
+
+uid_t getuid(const char *usr) {
+  int fd = open("/etc/passwd", O_RDONLY);
+  if (fd == -1) {
+    perror("getuid: open");
+    return -1;
+  }
+
+  char *b = malloc(GETUSER_BUFSIZ);
+
+  if (read(fd, b, GETUSER_BUFSIZ) == -1) {
+    perror("getuid: read");
+    free(b);
+    close(fd);
+  }
+
+  uid_t uid = -1;
+
+  char *linesav;
+  char *line = strtok_r(b, "\n", &linesav);
+  while (line) {
+
+    char *fieldsav = 0;
+    char *name     = strtok_r(line, ":", &fieldsav);
+    strtok_r(NULL, ":", &fieldsav);
+    char *field = strtok_r(NULL, ":", &fieldsav);
+
+    int id = atoi(field);
+    if (!strcmp(name, usr)) {
+      uid = id;
+    }
+
+    line = strtok_r(NULL, "\n", &linesav);
+  }
+
+  free(b);
+  if (close(fd) == -1) {
+    perror("getuid: close");
+    return -1;
+  }
+  return uid;
+}
+
+int chkcred(const char *usr, const char *cred, struct userinfo *info) {
+
+  if(!(info->pass_req & UI_ALLOCATED)) {
+    int r = getuser(usr, 0, info);
+    if(r && !(info->pass_req & 1)) return 1;
+  }
+
+  int fd = open("/etc/shadow", O_RDONLY);
+  if (fd == -1) {
+    perror("chkcred: open");
+    return 0;
+  }
+
+  char *b = malloc(GETUSER_BUFSIZ);
+
+  if (read(fd, b, GETUSER_BUFSIZ) == -1) {
+    perror("chkcred: read");
+    free(b);
+    close(fd);
+  }
+
+  int   stat = 0;
+  char *linesav;
+  char *line = strtok_r(b, "\n", &linesav);
+  while (line) {
+
+    char *fieldsav = 0;
+    char *name     = strtok_r(line, ":", &fieldsav);
+    char *pass     = strtok_r(NULL, ":", &fieldsav);
+
+    if (!strcmp(name, usr)) {
       char *psav = 0;
-      char *typ = strtok_r(pass, "$", &psav);
-      if(strcmp(typ, "fu")) break;
+      char *typ  = strtok_r(pass, "$", &psav);
+      if (strcmp(typ, "fu"))
+        break;
       char *seed = strtok_r(NULL, "$", &psav);
-      char *hsh = strtok_r(NULL, "$", &psav);
+      char *hsh  = strtok_r(NULL, "$", &psav);
 
-      int sed = atoi(seed);
-      uint32_t h = atoi(hsh);
-      uint32_t hash = murmur3((void*)cred, strlen(cred)+1, sed);
+      int      sed  = atoi(seed);
+      uint32_t h    = atoi(hsh);
+      uint32_t hash = murmur3((void *)cred, strlen(cred), sed);
 
-      if(h == hash) {
+      // printkf("h: %u hash: %u\n", h, hash);
+
+      if (h == hash) {
         stat++;
+        break;
       }
     }
 
@@ -188,9 +220,10 @@ int chkcred(const char *usr, const char *cred) {
   }
 
   free(b);
-  if(close(fd) == -1) {
-    perror("getuser: close");
+  if (close(fd) == -1) {
+    perror("chkcred: close");
     return 0;
   }
-  return stat;
+
+  return !!stat;
 }

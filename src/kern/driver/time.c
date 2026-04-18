@@ -4,6 +4,7 @@
 #include "proc/proc.h"
 #include "video/printf.h"
 #include "video/video.h"
+#include <cpu/irq.h>
 
 #define PIT_DATA 0x40 // only for channel 0 >:3c
 #define PIT_COMM 0x43
@@ -63,7 +64,7 @@ void timer_handler(struct regs *r) {
   (void)r;
 
   counter++;
-  pic_eoi();
+  general_eoi();
 
   // it is fixed now Ü
   schedule();
@@ -93,8 +94,8 @@ void init_pit(uint32_t freq) {
   outb(PIT_DATA, div & 0xff);
   outb(PIT_DATA, (div >> 8) & 0xff);
 
-  register_irq(timer_handler, 0);
-  pic_cm(0);
+  register_irq(timer_handler, 0, "timer");
+  // pic_cm(0);
 }
 
 /* note from nfoxers: code below taken from the linux kernel 0.01 source */

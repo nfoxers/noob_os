@@ -1,13 +1,14 @@
 #ifndef VFS_H
 #define VFS_H
 
+#include "ams/sys/types.h"
 #include "cpu/spinlock.h"
 #include "lib/list.h"
 #include "stddef.h"
 #include "stdint.h"
-#include "ams/sys/types.h"
 
 #include "ams/sys/stat.h"
+#include "dev/block_dev.h"
 
 #define F_USED 0x1000
 #define F_ADDR 0x0008
@@ -48,6 +49,7 @@ typedef struct dirstream {
 
 struct super_block;
 struct inode;
+struct page;
 
 struct statfs {
 };
@@ -83,6 +85,8 @@ struct super_ops {
   void (*statfs)(struct super_block *, struct statfs *);
 };
 
+struct addrspace_ops;
+
 struct pipe {
   uint8_t  buf[PIPEBUFSIZ];
   uint16_t flg;
@@ -91,8 +95,6 @@ struct pipe {
 
   spinlock_t lock;
 };
-
-struct dentry;
 
 struct mount {
   struct super_block *sb;
@@ -120,7 +122,8 @@ struct super_block {
 
   struct super_ops *s_op;
 
-  void *generic_sbp;
+  struct block_dev *s_bdev;
+  void             *generic_sbp;
 };
 
 struct inode {
@@ -138,13 +141,14 @@ struct inode {
 
   unsigned short refs;
 
-  struct super_block *sb;
-  struct inode_ops   *ops;
-  struct file_ops    *fops;
-  struct mount       *mnt;
+  struct super_block   *sb;
+  struct inode_ops     *ops;
+  struct file_ops      *fops;
+  struct addrspace_ops *aps;
+  struct mount         *mnt;
 
   struct hlist_node hnode;
-  struct list_head lru;
+  struct list_head  lru;
 
   void *pdata;
 };
@@ -207,6 +211,5 @@ void set_dev(struct super_block *b, struct inode *root);
 /* library functions */
 int lsdir(const char *path, int flg);
 int findfreefd();
-
 
 #endif

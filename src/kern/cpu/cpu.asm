@@ -23,6 +23,10 @@ switch_pd: ; [esp] = ret, [esp+4] = pd_addr
   or eax, 0x80000001
   mov cr0, eax
 
+  mov eax, cr4
+  or eax, (1 << 4) ; PSE
+  mov cr4, eax
+
   ret
 
 global flush_pg:
