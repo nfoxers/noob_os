@@ -2,6 +2,7 @@
 #define VIRTIO_H
 
 #include "stdint.h"
+#include <driver/pci.h>
 
 #define VIO_REG_DEVFEAT 0x00
 #define VIO_REG_GESFEAT 0x04
@@ -32,6 +33,65 @@
 #define DFT_DEVERR  0x40
 #define DFT_DRVFAIL 0x80
 
+/* pci details*/
+
+#define VIO_PCI_CAP_COMMON_CFG 1
+#define VIO_PCI_CAP_NOTIFY_CFG 2
+#define VIO_PCI_CAP_ISR_CFG 3
+#define VIO_PCI_CAP_DEVICE_CFG 4
+#define VIO_PCI_CAP_PCI_CFG 5
+#define VIO_PCI_CAP_SHM_CFG 8
+#define VIO_PCI_CAP_VENDOR_CFG 9
+
+struct vio_pci_cap {
+  uint8_t cap_vndr;
+  uint8_t cap_next;
+  uint8_t cap_len;
+  uint8_t cfg_type;
+  uint8_t bar;
+  uint8_t id;
+  uint8_t pad[2];
+  uint32_t off;
+  uint32_t len;
+};
+
+/* mmio details */
+
+typedef const uint64_t ro64_t;
+typedef uint64_t rw64_t;
+typedef const uint32_t ro32_t;
+typedef uint32_t rw32_t;
+typedef const uint16_t ro16_t;
+typedef uint16_t rw16_t;
+typedef const uint8_t ro8_t;
+typedef uint8_t rw8_t;
+
+struct vio_pci_common_cfg {
+  rw32_t device_feature_select;
+  ro32_t device_feature;
+  rw32_t driver_feature_select;
+  rw32_t driver_feature;
+
+  rw16_t config_msix_vector;
+  ro16_t num_queues;
+  rw8_t device_status;
+  ro8_t config_generation;
+
+  rw16_t queue_select;
+  rw16_t queue_size;
+  rw16_t queue_msix_vector;
+  rw16_t queue_enable;
+  ro16_t queue_notify_off;
+  rw64_t queue_desc;
+  rw64_t queue_driver;
+  rw64_t queue_device;
+  ro16_t queue_notif_config_data;
+  rw16_t queue_reset;
+
+  ro16_t admin_queue_index;
+  ro16_t admin_queue_num;
+} __attribute__((packed));
+
 struct viobuf {
   uint64_t addr;
   uint32_t len;
@@ -56,5 +116,9 @@ struct vioblkreq {
   uint8_t data[];
   // uint8_t status
 } __attribute__((packed));
+
+/* functions */
+
+void init_virtio_blk(struct pci_hdr *hdr);
 
 #endif

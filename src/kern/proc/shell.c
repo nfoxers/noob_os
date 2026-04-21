@@ -111,7 +111,7 @@ void bf() {
 
 int c_exit(char **argv, int argc) {
   ARGS_USELESS;
-  enditall();
+
   return 0; // this line is useless
 }
 
@@ -227,8 +227,9 @@ int printfile(const char *file) {
 
   int r = 0;
   int c = 0;
-  while((r = read(fd, &c, 1)) == 1) {
-    if(write(stdout, &c, 1) == -1) perror("write");
+  int count = 1;
+  while((r = read(fd, &c, count)) == count) {
+    if(write(stdout, &c, r) == -1) perror("write");
   }
 
   close(fd);
@@ -293,43 +294,9 @@ int c_lsirq(char **argv, int argc) {
   return 0;
 }
 
-#define LDADDR 0x00
-
-int c_exec(char **argv, int argc) {
-  if (argc != 2)
-    return 2;
-  int fd = open(argv[1], O_RDONLY);
-  if (fd == -1) {
-    perror("exec: open");
-    return 1;
-  }
-
-  uint8_t *buf = malloc_align(0x1000, 0x1000);
-
-  if (read(fd, (char *)buf, 1024) == -1) {
-    perror("exec: read");
-    free_align(buf);
-    return 1;
-  }
-  if (close(fd) == -1) {
-    perror("exec: close");
-    free_align(buf);
-    return 1;
-  }
-
-  void (*f)() = (void (*)())buf;
-
-  alloc_page(0, (uint32_t)buf);
-
-  spawn_proc(f, CS_K, NULL);
-
-  // free_align(buf);
-  return 0;
-}
-
 static char const *const cmds[] = {
     "help", "exit", "ls", "rm", "touch", "clear", "time", "bf", "lspci", "mkdir", "cd",
-    "cat", "mall", "h", "mused", "icach", "ipurge", "lsirq", "exec"};
+    "cat", "mall", "h", "mused", "icach", "ipurge", "lsirq"};
 
 int c_help(char **argv, int argc) {
   ARGS_USELESS;
@@ -345,7 +312,7 @@ int c_help(char **argv, int argc) {
 
 static int (*const ftab[])(char *argv[NARGS], int argc) = {
     c_help, c_exit, c_ls, c_rm, c_touch, c_clear, c_time, c_bf, c_lspci, c_mkdir, c_cd,
-    c_cat, c_mall, c_h, c_mused, c_icach, c_ipurge, c_lsirq, c_exec};
+    c_cat, c_mall, c_h, c_mused, c_icach, c_ipurge, c_lsirq};
 
 void shell() {
   printkf("note: creds are root/toor or user w no pass\n");

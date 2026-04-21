@@ -3,6 +3,7 @@
 #include "cpu/idt.h"
 #include "crypt/blake2s.h"
 #include "crypt/crypt.h"
+#include "driver/disk/ide.h"
 #include "driver/keyboard.h"
 #include "driver/pci.h"
 #include "driver/serial.h"
@@ -27,7 +28,7 @@
 extern void enditall();
 
 void setup() {
-  zero_bss();
+  //zero_bss();
   kmalloc_init();
   init_video();
 
@@ -45,27 +46,35 @@ void setup() {
 
   syscall_init();
 
+  ata_init();
   init_pit(1);
   pci_init();
   init_serial(9600);
   fpu_init();
 
   page_init();
-  init_fs();
+  //init_fs();
 
   // init_devs();
-  init_kbd();
-  init_tty();
+  //init_kbd();
+  //init_tty();
 
   //pic_disable();
 
-  mkadv();
+  //mkadv();
 
   check_capat();
   printk("time of boot: ");
   print_time();
 
   printkf("used dynamic memory: %d KiB (%d B)\n", getused() / 1024, getused());
+}
+
+void kmain(void *ptr);
+
+void _c_start(void *ptr) {
+  //*(char *)0xb8000 = 'A';
+  kmain(ptr);
 }
 
 int checks() {
@@ -79,7 +88,9 @@ int checks() {
   return 0;
 };
 
-void kmain(void) {
+void kmain(void *ptr) {
+  (void)ptr;
+  //while(1);
   setup();
   if(checks() == -1) {
     printkf("some checks failed...\n");
@@ -92,8 +103,6 @@ void kmain(void) {
 
   STI;
   shell();
-
-  enditall();
 
   return;
 }

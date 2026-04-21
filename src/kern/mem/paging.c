@@ -10,7 +10,7 @@
 #define PAGE_PS (1 << 7)
 
 #define PDIR_ATTR 0x7
-#define NOPAGES   0x200
+#define NOPAGES   0x400
 
 void debug_vaddr(uint32_t addr) {
   uint32_t off = addr & 0xfff;

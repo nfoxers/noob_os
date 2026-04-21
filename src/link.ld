@@ -1,17 +1,10 @@
-ENTRY(_start)
+ENTRY(_as_start)
 SECTIONS
 {  
-  . = 0x1000;
-  .bss : {
-    __bss_start__ = .;
-    *(.bss*)
-    *(COMMON)
-    __bss_end__ = .;
-  }
-
-  . = 0x9400;
+  . = 1M;
   .text : {
     __text_start__ = .;
+    KEEP(*(.multiboot))
     *(.text.start)
     *(.text*)
     __text_end__ = .;
@@ -21,5 +14,12 @@ SECTIONS
   }
   .data : {
     *(.data*)
+  }  
+  
+  .bss : {
+    __bss_start__ = .;
+    *(.bss*)
+    *(COMMON)
+    __bss_end__ = .;
   }
 }

@@ -149,7 +149,7 @@ void pci_enumerate() {
   }
 }
 
-void rtl8139_init(struct pci_hdr *hdr, uint32_t bus, uint32_t dev);
+extern void init_virtio_blk(struct pci_hdr *hdr);
 
 void pci_init() {
   print_init("pci", "initializing pci devices...", 0);
@@ -202,6 +202,10 @@ loop:
 
             cap = next;
           }
+        }
+        
+        if(h->common.vendid == 0x1af4 && h->common.devid == 0x1001) {
+          init_virtio_blk(h);
         }
 
         // todo: remove this

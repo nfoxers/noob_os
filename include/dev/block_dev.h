@@ -14,6 +14,8 @@
 #define BIO_READ  0
 #define BIO_WRITE 1
 
+#define DPART_MAXPART 4
+
 typedef uint32_t sector_t;
 
 struct block_dev;
@@ -26,10 +28,12 @@ struct hd_struct {
 
 struct dpart_tbl {
   uint8_t           pad;
-  struct hd_struct *part[];
+  struct hd_struct *part[DPART_MAXPART];
 };
 
 struct bd_ops {
+  ssize_t (*read)(uint32_t, size_t, uint8_t *);
+  ssize_t (*write)(uint32_t, size_t, const uint8_t *);
 };
 
 struct bio_vect {

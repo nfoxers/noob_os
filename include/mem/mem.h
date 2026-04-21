@@ -9,7 +9,7 @@
 #define HEAP_SIZ 1024
 
 // y'know what, i surrender living off below 1MB. a cool kernel can't just only use 25KB of memory (b)
-#define EXT_MEM_BASE 0x00100000
+#define EXT_MEM_BASE 0x00200000
 #define EXT_MEM_SIZ  ((size_t)1 << 20) // 1MB o' size
 
 extern uint8_t __bss_start__;

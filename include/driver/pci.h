@@ -92,6 +92,12 @@ struct pci_hdr {
   } tsh; // "type specific header" lol
 } __attribute__((packed));
 
+struct pci_loc {
+  uint8_t dev;
+  uint8_t func;
+  uint8_t bus;
+};
+
 /* things for msi-x */
 
 struct msix_entry {

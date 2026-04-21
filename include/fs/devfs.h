@@ -26,6 +26,7 @@ struct devidx {
 struct device {
   const char *name;
   const struct devidx *idx;
+  size_t off;
   void *pdata;
 
   struct dev_ops ops;

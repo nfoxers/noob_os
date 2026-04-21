@@ -1,4 +1,5 @@
 AS = nasm
+AR = llvm-ar
 CC = clang
 LD = ld.lld
 
@@ -7,10 +8,12 @@ CFLAGS = -target i386-elf -g -Wall -Wextra -ffreestanding -fno-pic -m32 -Iinclud
 -fno-ident -fno-asynchronous-unwind-tables -fno-unwind-tables \
 -fno-pie -falign-functions=1 -falign-loops=1 -fno-plt -nostdlib
 
+CFLAGSu = $(CFLAGS) -nostartfiles -nodefaultlibs
+
 LDFLAGS = -m elf_i386 -T src/link.ld
 LDFLAGSu = -m elf_i386 -T user/link.ld
 
-QMFLAGS = -netdev user,id=net0 -device rtl8139,netdev=net0
+QMFLAGS = 
 
 SRC = $(shell find ./src/kern -name '*.c' -o -name '*.asm')
 OBJ = $(patsubst ./src/kern/%.c,./build/kern/%.o, $(SRC))
@@ -18,6 +21,9 @@ OBJ := $(patsubst ./src/kern/%.asm,./build/kern/%.o, $(OBJ))
 
 SRCu = $(shell find ./user -name '*.c')
 OBJu = $(patsubst ./user/%.c,./build/user/%.o, $(SRCu))
+
+SRClc = $(shell find ./libc -name '*.c')
+OBJlc = $(patsubst ./libc/%.c,./build/libc/%.o, $(SRClc)) ./build/libc/crt.o
 
 DEP := $(OBJ:.o=.d) $(OBJu:.o=.d)
 
@@ -27,16 +33,11 @@ DATA := $(shell find ./data)
 
 all: bin/os.img size
 
-bin/os.img: build/boot.bin build/kern.bin build/user.bin $(DATA) Makefile
+bin/os.img: build/kern.elf build/user.elf $(DATA) Makefile
 	@mkdir -p bin
-	cp $< $@
-	truncate $@ -s 320K
-	mcopy -i $@ build/kern.bin ::kernel.bin
-
-	mmd -i $@ ::dev
-	mcopy -i $@ -s data/* ::
-
-	mcopy -i $@ build/user.bin ::home/user.bin
+	cp ./grub/initdisk.img $@
+	e2cp ./grub/grub.cfg $@:/boot/grub
+	e2cp $< $@:/boot
 
 build/boot.bin: src/boot/boot.asm
 	@mkdir -p build
@@ -45,20 +46,19 @@ build/boot.bin: src/boot/boot.asm
 build/kern.bin: build/kern.elf
 	llvm-objcopy -O binary $< $@
 
-build/user.bin: build/user.elf
-	llvm-objcopy -O binary $< $@
-
-build/user.elf: $(OBJu)
-	$(LD) $(LDFLAGS) $^ -o $@
+build/user.elf: $(OBJu) build/libc.a
+	$(LD) $(LDFLAGSu) $^ -o $@
 
 build/kern.elf: $(OBJ)
 	$(LD) $(LDFLAGS) $^ -o $@
 
-build/%.o: src/%.c
-	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c $< -o $@
+build/libc.a: $(OBJlc)
+	rm $@
+	$(AR) rcs $@ $^
 
-build/user/%.o: user/%.c
+
+
+build/%.o: src/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -66,23 +66,28 @@ build/%.o: src/%.asm
 	@mkdir -p $(dir $@)
 	$(AS) -felf $< -o $@
 
--include $(DEP)
+build/user/%.o: user/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
 
-bin/disk.img: tools/mkdisk.sh
-	chmod +x $<
-	./$<
+build/libc/%.o: libc/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+build/libc/%.o: libc/%.asm
+	@mkdir -p $(dir $@)
+	$(AS) -felf $< -o $@
+
+-include $(DEP)
 
 clean:
 	rm -rf build bin
 
 run: bin/os.img
-	qemu-system-i386 $(QMFLAGS) -drive format=raw,file=$<
+	qemu-system-i386 $(QMFLAGS) -drive format=raw,file=$<,if=ide
 	
 debug: bin/os.img
-	qemu-system-i386 -s -S $(QMFLAGS) -drive format=raw,file=$<
-
-rundsk: bin/os.img bin/disk.img
-	qemu-system-i386 $(QMFLAGS) -drive format=raw,file=$< -drive format=raw,file=bin/disk.img,if=virtio
+	qemu-system-i386 -s -S $(QMFLAGS) -drive format=raw,file=$<,if=ide
 
 size: tools/chksiz.py
 	@echo --------------
