@@ -47,6 +47,9 @@ void setup() {
   syscall_init();
 
   ata_init();
+
+  //while(1);
+
   init_pit(1);
   pci_init();
   init_serial(9600);
@@ -56,8 +59,8 @@ void setup() {
   //init_fs();
 
   // init_devs();
-  //init_kbd();
-  //init_tty();
+  init_kbd();
+  init_tty();
 
   //pic_disable();
 
@@ -92,6 +95,11 @@ void kmain(void *ptr) {
   (void)ptr;
   //while(1);
   setup();
+
+  int fd = open("/boot", O_RDONLY);
+  printkf("fd: %d\n", fd);
+  close(fd);
+
   if(checks() == -1) {
     printkf("some checks failed...\n");
     while(1);

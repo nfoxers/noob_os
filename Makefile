@@ -2,6 +2,8 @@ AS = nasm
 AR = llvm-ar
 CC = clang
 LD = ld.lld
+STRIP = llvm-strip
+GZ = gzip
 
 CFLAGS = -target i386-elf -g -Wall -Wextra -ffreestanding -fno-pic -m32 -Iinclude -Oz -MMD -MP \
 -march=i686 -foptimize-sibling-calls -fno-stack-protector -fno-builtin \
@@ -35,9 +37,17 @@ all: bin/os.img size
 
 bin/os.img: build/kern.elf build/user.elf $(DATA) Makefile
 	@mkdir -p bin
+
+	$(STRIP) --strip-all $< -o build/kernel
+#	rm build/kernel.gz
+	$(GZ) -9 -f build/kernel
+
 	cp ./grub/initdisk.img $@
 	e2cp ./grub/grub.cfg $@:/boot/grub
-	e2cp $< $@:/boot
+	e2cp build/kernel.gz $@:/boot
+
+	e2cp data/etc/* $@:/etc
+	e2mkdir $@:/dev
 
 build/boot.bin: src/boot/boot.asm
 	@mkdir -p build

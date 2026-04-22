@@ -89,7 +89,7 @@ void irq_handler(struct regs *r) {
     return;
   isr_hand e = irq_hand[r->int_no - 32];
   if (!e) {
-    printk("no irq handler! unhandling irq...\n");
+    printkf("no irq handler! unhandling irq %d...\n", r->int_no - 32);
     return;
   }
 

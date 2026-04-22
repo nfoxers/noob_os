@@ -123,6 +123,7 @@ struct super_block {
   struct super_ops *s_op;
 
   struct block_dev *s_bdev;
+  struct gendisk *s_disk;
   void             *generic_sbp;
 };
 

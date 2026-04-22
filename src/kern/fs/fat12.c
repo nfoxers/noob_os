@@ -12,6 +12,8 @@
 
 #define BS ((struct bootsect *)0x7c00)
 
+#define FATROOT_DISABLE 1
+
 struct fat12info {
   uint16_t fat_start;
   uint16_t fat_addr;
@@ -57,7 +59,7 @@ void init_fs() {
     printk("mismatching boot signatures, either corrupt memory or idk\n");
     return;
   }
-
+#if !FATROOT_DISABLE
   fsinfo.fat_sectors = BS->fats * BS->spf;
   fsinfo.fat_start   = BS->sec_reserved;
   fsinfo.fat_addr    = fsinfo.fat_start * 512 + 0x7c00;
@@ -98,6 +100,8 @@ void init_fs() {
   set_special();
 
   memcpy(&p_curproc->p_user->u_cdir, &rootnode, sizeof(struct inode));
+
+#endif
 
   for (int i = 0; i < NOFILE; i++) {
     ofile[i] = 0;
@@ -416,7 +420,7 @@ struct super_ops fat_sops = {
     .read_inode = fat_inoder,
     .put_inode  = fat_put_inode};
 
-void set_special() {
+void set_sspecial() {
   init_devs();
 
   fsino_t dev_fs = fat_lookup_from("dev", &rootnode);

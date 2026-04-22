@@ -15,7 +15,6 @@ SECTIONS
   .data : {
     *(.data*)
   }  
-  
   .bss : {
     __bss_start__ = .;
     *(.bss*)

@@ -6,6 +6,7 @@
 #include <mem/mem.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <fs/ext2.h>
 
 // todo: actual ide/ahci support
 
@@ -148,6 +149,8 @@ int ata_init(void) {
   ata_dev.name     = "sda";
   ata_dev.pdata    = &ata_bdev;
   ata_dev.ops.read = ata_devread;
+
+  ext2_init(&atamaster);
 
   creat_devfs("sda", &ata_dev, 2, 0);
 
