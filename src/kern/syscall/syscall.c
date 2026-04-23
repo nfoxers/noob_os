@@ -104,11 +104,16 @@ uint32_t sys_dup2(ARGS) {
   return fsys_dup2(a1, a2);
 }
 
+uint32_t sys_fstat(ARGS) {
+  ARGS_USELESS;
+  return fsys_fstat(a1, (void*)a2);
+}
+
 /* jump table & handlers */
 
 const syshand systab[NSYS] = {
     0, 0, 0, sys_read, sys_write, sys_open, sys_close, 0, sys_yield, sys_chdir, sys_mkdir,
-  sys_unlink, sys_opendir, sys_closedir, sys_pipe, sys_ioctl, sys_dup, sys_dup2};
+  sys_unlink, sys_opendir, sys_closedir, sys_pipe, sys_ioctl, sys_dup, sys_dup2, sys_fstat};
  
 void sys_hand(struct regs *r) {
   syshand e = systab[r->eax];

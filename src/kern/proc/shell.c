@@ -1,3 +1,4 @@
+#include "ams/sys/stat.h"
 #include "cpu/gdt.h"
 #include "cpu/idt.h"
 #include "cpu/irq.h"
@@ -225,12 +226,21 @@ int printfile(const char *file) {
     return 1;
   }
 
-  int r = 0;
+  struct stat buf;
+  fstat(fd, &buf);
+
   int c = 0;
-  int count = 1;
-  while((r = read(fd, &c, count)) == count) {
-    if(write(stdout, &c, r) == -1) perror("write");
+
+  int r = 0;
+  uint8_t *b = !S_ISCHR(buf.st_mode) ? malloc(buf.st_size) : &c;  
+  int count = !S_ISCHR(buf.st_mode) ? buf.st_size : 1;
+
+  printkf("count: %d %p\n", count, b);
+
+  while((r = read(fd, b, count)) == count) {
+    if(write(stdout, b, r) == -1) perror("write");
   }
+  !S_ISCHR(buf.st_mode) ? free(b) : 0;
 
   close(fd);
   return 0;

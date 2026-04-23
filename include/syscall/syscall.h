@@ -25,6 +25,7 @@
 #define SYS_IOCTL    15
 #define SYS_DUP      16
 #define SYS_DUP2     17
+#define SYS_FSTAT    18
 
 void     syscall_init();
 uint32_t syscall(uint32_t nr, ...);
@@ -50,6 +51,7 @@ int mkdir(const char *pathname, mode_t mode);
 int unlink(const char *path);
 int pipe(int fd[2]);
 int ioctl(int fd, int op, void *argp);
+int fstat(int fd, struct stat *statbuf);
 
 // doesnt even exist in linux syscall table
 

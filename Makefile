@@ -47,7 +47,10 @@ bin/os.img: build/kern.elf build/user.elf $(DATA) Makefile
 	e2cp build/kernel.gz $@:/boot
 
 	e2cp data/etc/* $@:/etc
+
 	e2mkdir $@:/dev
+	e2mkdir -P 666 $@:/root
+	e2mkdir $@:/home/user
 
 build/boot.bin: src/boot/boot.asm
 	@mkdir -p build

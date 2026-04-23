@@ -714,6 +714,31 @@ int fsys_dup(int oldfd) {
   return newfd;
 }
 
+int fsys_fstat(int fd, struct stat *statbuf) {
+  if (fd >= NOFILE)
+    return -EBADF;
+
+  struct file *f = p_curproc->p_user->u_ofile[fd];
+
+  // printkf("f: %x\n", f->fops);
+
+  if (!f)
+    return -EBADF;
+  if (!(f->flags & F_USED))
+    return -EBADF;
+  if (!f->inode)
+    return -EBADF;
+
+  struct inode *in = f->inode;
+  statbuf->st_ino = in->ino;
+  statbuf->st_mode = in->mode;
+  statbuf->st_size = in->size;
+  // ! expand!!
+
+  return 0;
+}
+
+
 /* convenience functions */
 // now these can return whatever they want
 

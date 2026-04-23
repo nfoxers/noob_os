@@ -31,8 +31,11 @@
 #define PIPEBUFSIZ 128
 #define P_FREED    1
 
-struct inode;
+struct nnux_dirent;
+struct super_block;
 struct file;
+struct inode;
+struct page;
 
 // typedef uint32_t off_t;
 typedef ino_t fsino_t;
@@ -47,12 +50,6 @@ typedef struct dirstream {
   char data[DIRENT_MAXSIZ];
 } DIR;
 
-struct super_block;
-struct inode;
-struct page;
-
-struct statfs {
-};
 
 // extra comments so i dont waste dynamic memory
 struct inode_ops {
@@ -71,6 +68,8 @@ struct file_ops {
 
   ssize_t (*read)(struct file *file, void *buf, size_t siz);
   ssize_t (*write)(struct file *file, const void *buf, size_t siz);
+  ssize_t (*readdir)(struct file *file, struct nnux_dirent *dirent, size_t count);
+
   off_t (*lseek)(struct file *file, off_t off, int whence);
 
   int (*ioctl)(struct file *file, int op, void *arg);
@@ -123,7 +122,7 @@ struct super_block {
   struct super_ops *s_op;
 
   struct block_dev *s_bdev;
-  struct gendisk *s_disk;
+  struct gendisk   *s_disk;
   void             *generic_sbp;
 };
 
@@ -180,6 +179,16 @@ struct dir_data {
   int              count;
 };
 
+// cognate to linux-dirent
+struct nnux_dirent {
+  unsigned long d_ino;
+  unsigned long d_off;
+  unsigned long d_reclen;
+  char pad;
+  char d_type;
+  char name[];
+};
+
 char *path_canon(const char *cwd, const char *path);
 
 /* useful stuff */
@@ -206,6 +215,7 @@ int     fsys_unlink(const char *pathname);
 int     fsys_pipe(int fd[2]);
 int     fsys_dup(int oldfd);
 int     fsys_dup2(int oldfd, int newfd);
+int     fsys_fstat(int fd, struct stat *statbuf);
 
 void set_dev(struct super_block *b, struct inode *root);
 

@@ -9,6 +9,8 @@
 #include <proc/proc.h>
 #include <stdio.h>
 
+// ! todo: partition support
+
 extern struct gendisk atamaster;
 
 struct ext2_superblock ext2_sb;
@@ -187,7 +189,7 @@ void set_special() {
   init_devs();
 
   fsino_t dev_fs = ext2_lookup(&rootnode, "dev");
-  printkf("devfs ino: %d\n", dev_fs);
+  //printkf("devfs ino: %d\n", dev_fs);
   struct inode *in = iget(&g_ext2_sb, dev_fs);
   imount(in, &devmnt);
 }

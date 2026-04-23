@@ -25,9 +25,9 @@
 #include <lib/errno.h>
 #include <stdarg.h>
 
-extern void enditall();
+extern void parse_multiboot2(void *ptr);
 
-void setup() {
+void setup(void *ptr) {
   //zero_bss();
   kmalloc_init();
   init_video();
@@ -46,9 +46,11 @@ void setup() {
 
   syscall_init();
 
+  // uncomment when useful
+  //parse_multiboot2(ptr); 
+
   ata_init();
 
-  //while(1);
 
   init_pit(1);
   pci_init();
@@ -56,7 +58,6 @@ void setup() {
   fpu_init();
 
   page_init();
-  //init_fs();
 
   // init_devs();
   init_kbd();
@@ -64,7 +65,7 @@ void setup() {
 
   //pic_disable();
 
-  //mkadv();
+  mkadv();
 
   check_capat();
   printk("time of boot: ");
@@ -92,13 +93,7 @@ int checks() {
 };
 
 void kmain(void *ptr) {
-  (void)ptr;
-  //while(1);
-  setup();
-
-  int fd = open("/boot", O_RDONLY);
-  printkf("fd: %d\n", fd);
-  close(fd);
+  setup(ptr);
 
   if(checks() == -1) {
     printkf("some checks failed...\n");
