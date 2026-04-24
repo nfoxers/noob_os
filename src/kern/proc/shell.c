@@ -235,8 +235,6 @@ int printfile(const char *file) {
   uint8_t *b = !S_ISCHR(buf.st_mode) ? malloc(buf.st_size) : &c;  
   int count = !S_ISCHR(buf.st_mode) ? buf.st_size : 1;
 
-  printkf("count: %d %p\n", count, b);
-
   while((r = read(fd, b, count)) == count) {
     if(write(stdout, b, r) == -1) perror("write");
   }
@@ -332,9 +330,9 @@ static int (*const ftab[])(char *argv[NARGS], int argc) = {
     c_cat, c_mall, c_h, c_mused, c_icach, c_ipurge, c_lsirq, c_nls};
 
 void shell() {
+  printkf("\e[37m");
   printkf("note: creds are root/toor or user w no pass\n");
   login();
-  printk("\e\x07");
   printfile("/etc/motd");
 
   const char *hostname = gethostname();
@@ -345,7 +343,7 @@ void shell() {
 
   STI; // enable the keyboard an dstuff
   while (1) {
-    printkf("\e\x02%s@%s\e\x07:\e\x03%s\e\x07$ ", p_curproc->p_user->name, hostname, p_curproc->p_user->u_cdirname);
+    printkf("\e[32m%s@%s\e[m:\e[36m%s\e[m$ ", p_curproc->p_user->name, hostname, p_curproc->p_user->u_cdirname);
     int rd = kgets(buf, sizeof buf);
     // putchr('\n');
 

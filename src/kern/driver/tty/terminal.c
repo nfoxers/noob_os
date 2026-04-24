@@ -19,10 +19,24 @@ void term_set_cursor(struct terminal *t, int x, int y) {
   }
 }
 
+void term_scroll_absolute(struct terminal *t) {
+  memcpy(t->cbuf, t->cbuf + t->width, t->width * t->height * sizeof(*t->cbuf));
+  if (t->cops && t->cops->flush) {
+    t->cops->flush(t);
+    term_set_cursor(t, t->cursor_x, t->cursor_y);
+  }
+}
+
 void term_scroll_up(struct terminal *t) {
-  if(t->scroll_top + t->dheight >= t->height) return;
+  if(t->scroll_top + t->dheight >= t->height) {
+    term_scroll_absolute(t);
+    t->cursor_y--;
+    term_set_cursor(t, t->cursor_x, t->cursor_y);
+    return;
+  }
 
   t->scroll_top++;
+  //memset(t->cbuf + (t->dheight + t->scroll_top) * t->width, 0, sizeof(*t->cbuf) * t->width);
   if (t->cops && t->cops->flush) {
     t->cops->flush(t);
     term_set_cursor(t, t->cursor_x, t->cursor_y);
@@ -44,13 +58,13 @@ void term_putc_raw(struct terminal *t, char c) {
     return;
   }
 
-  uint8_t k = t->scroll_top;
-
   if (t->cursor_x >= t->width) {
+    if(t->cursor_y >= t->height) t->cursor_y--;
     if (t->cursor_y - t->scroll_top >= t->dheight) {
       term_scroll_up(t);
       t->cursor_y--;
     }
+    
     t->cursor_x = 0;
     t->cursor_y++;
   }
@@ -67,7 +81,6 @@ void term_putc_raw(struct terminal *t, char c) {
 void term_newline(struct terminal *t) {
   if (t->cursor_y - t->scroll_top >= t->dheight) {
     term_scroll_up(t);
-    return;
   };
   t->cursor_y++;
   //_putchr(toascii(t->cursor_y));

@@ -4,6 +4,7 @@ CC = clang
 LD = ld.lld
 STRIP = llvm-strip
 GZ = gzip
+XZ = xz
 
 CFLAGS = -target i386-elf -g -Wall -Wextra -ffreestanding -fno-pic -m32 -Iinclude -Oz -MMD -MP \
 -march=i686 -foptimize-sibling-calls -fno-stack-protector -fno-builtin \
@@ -27,24 +28,26 @@ OBJu = $(patsubst ./user/%.c,./build/user/%.o, $(SRCu))
 SRClc = $(shell find ./libc -name '*.c')
 OBJlc = $(patsubst ./libc/%.c,./build/libc/%.o, $(SRClc)) ./build/libc/crt.o
 
-DEP := $(OBJ:.o=.d) $(OBJu:.o=.d)
-
 DATA := $(shell find ./data)
+
+DEP := $(OBJ:.o=.d) $(OBJu:.o=.d)
+DEP_EXTRA := Makefile grub/grub.cfg $(DATA)
+
 
 .PHONY: clean run debug size size2
 
 all: bin/os.img size
 
-bin/os.img: build/kern.elf build/user.elf $(DATA) Makefile
+bin/os.img: build/kern.elf build/user.elf $(DEP_EXTRA)
 	@mkdir -p bin
 
 	$(STRIP) --strip-all $< -o build/kernel
 #	rm build/kernel.gz
-	$(GZ) -9 -f build/kernel
+	$(XZ) -9f build/kernel
 
 	cp ./grub/initdisk.img $@
 	e2cp ./grub/grub.cfg $@:/boot/grub
-	e2cp build/kernel.gz $@:/boot
+	e2cp build/kernel.xz $@:/boot
 
 	e2cp data/etc/* $@:/etc
 

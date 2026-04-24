@@ -14,7 +14,7 @@
 
 #define VGA ((uint16_t *)0xb8000)
 
-#define VGA_DEV_HEIGHT 25
+#define VGA_DEV_HEIGHT 24
 #define VGA_DEV_WIDTH  80
 
 #define VGA_SCROLL_HEIGHT 50
@@ -47,17 +47,17 @@ extern void _putchr(char c);
 
 void vga_putc(struct terminal *t, int x, int y, struct cell *c) {
   //_putchr(c->ch);
-  VGA[y * t->width + x] = c->ch | (((t->fg << 8) & 0x0f00) | ((t->bg << 12) & 0xf000));
+  VGA[y * t->width + x] = (uint8_t)c->ch | (((t->fg << 8) & 0x0f00) | ((t->bg << 12) & 0xf000));
 }
 
 void vga_flush(struct terminal *t) {
   // ! absolutes kino
   for (int i = 0; i < t->width; i++) {
-    for (int j = 0; j < t->dheight; j++) {
+    for (int j = 0; j < t->dheight+1; j++) {
       if (j + t->scroll_top >= t->height)
         break;
       struct cell *c        = &t->cbuf[(j + t->scroll_top) * t->width + i];
-      VGA[j * t->width + i] = c->ch | (((c->fg << 8) & 0x0f00) | ((c->bg << 12) & 0xf000));
+      VGA[j * t->width + i] = (uint8_t)c->ch | (((c->fg << 8) & 0x0f00) | ((c->bg << 12) & 0xf000));
     }
   }
 }
@@ -86,6 +86,20 @@ void vga_clear(struct terminal *t) {
         break;
       struct cell *c = &t->cbuf[(j + t->scroll_top) * t->width + i];
       c->fg          = 0x0f;
+    }
+  }
+}
+
+void vga_reflush(struct terminal *t) {
+  for (int i = 0; i < t->width; i++) {
+    for (int j = 0; j < t->dheight; j++) {
+      if (j + t->scroll_top >= t->height)
+        break;
+      struct cell *c        = &t->cbuf[(j + t->scroll_top) * t->width + i];
+      uint16_t v = VGA[j * t->width + i];
+      c->ch = v & 0xff;
+      c->fg = (v >> 8) & 0x0f;
+      c->bg = (v >> 12) & 0x0f;
     }
   }
 }
@@ -125,7 +139,9 @@ void vgatext_init() {
   vga_textterm.cursor_x = 0;
   vga_textterm.cursor_y = 0;
 
-  vga_clear(&vga_textterm);
+  vga_readcursor(&vga_textterm, &vga_textterm.cursor_x, &vga_textterm.cursor_y);
+  vga_reflush(&vga_textterm);
+  //vga_clear(&vga_textterm);
 
   vga_textterm.fg = 0x0f;
   vga_textterm.bg = 0x00;

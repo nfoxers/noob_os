@@ -49,6 +49,7 @@ void setup(void *ptr) {
   syscall_init();
 
   // uncomment when useful
+  (void)ptr;
   //parse_multiboot2(ptr); 
 
   ata_init();
@@ -101,8 +102,6 @@ void kmain(void *ptr) {
     printkf("some checks failed...\n");
     while(1);
   }
-
-  // printkf("stat for root: %d\n", chkcred("user", "toor"));
 
   // TODO: fork and execve
 

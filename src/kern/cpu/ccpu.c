@@ -22,7 +22,7 @@ void check_capat() {
   uint32_t tmp;
   __get_cpuid(1, &tmp, &tmp, &c_capat.ecx_leaf1, &c_capat.edx_leaf1);
 
-  printk("cpu extensions: \e\x0e");
+  printk("cpu extensions: \e[33m");
 
   uint32_t edx = c_capat.edx_leaf1;
   for(uint32_t i = 0; i < sizeof(idxl); i++) {
@@ -37,7 +37,7 @@ void check_capat() {
     printk("rdrnd");
   }
   // todo: more leafes
-  printk("\e\x0f\n");
+  printk("\e[m\n");
 }
 
 void rdmsr(uint32_t msr, uint32_t *restrict lo, uint32_t *restrict hi) {

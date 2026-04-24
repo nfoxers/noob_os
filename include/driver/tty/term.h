@@ -16,7 +16,7 @@ struct console_ops {
 };
 
 struct cell {
-  char    ch;
+  uint8_t ch;
   uint8_t fg, bg;
 };
 

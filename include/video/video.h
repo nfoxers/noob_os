@@ -14,6 +14,8 @@
 #define CL_BROWN   6
 #define CL_GRAY    7
 
+#define CL_YELLOW (CL_BROWN | 0x8)
+
 #define CL_LIGHT(c) ((c | 0x08))
 
 void printk(char *a);
