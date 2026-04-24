@@ -730,14 +730,41 @@ int fsys_fstat(int fd, struct stat *statbuf) {
     return -EBADF;
 
   struct inode *in = f->inode;
-  statbuf->st_ino = in->ino;
+  statbuf->st_ino  = in->ino;
   statbuf->st_mode = in->mode;
   statbuf->st_size = in->size;
+  statbuf->st_uid = in->uid;
+  statbuf->st_gid = in->gid;
+  statbuf->st_dev = in->sb->s_dev;
   // ! expand!!
 
   return 0;
 }
 
+int fsys_getdents(int fd, struct nnux_dirent *dirp, size_t count) {
+  if (!count)
+    return 0;
+
+  struct file *f;
+  ;
+  int r;
+  if ((r = check_fd(fd, &f)) < 0)
+    return r;
+
+  if (!f)
+    return -EBADF;
+  if (!(f->flags & F_USED))
+    return -EBADF;
+  if (!f->inode)
+    return -EBADF;
+  if (!S_ISDIR(f->inode->mode))
+    return -ENOTDIR;
+
+  if (f->fops && f->fops->readdir) {
+    return f->fops->readdir(f, dirp, count);
+  }
+  return -ENOSYS;
+}
 
 /* convenience functions */
 // now these can return whatever they want
@@ -807,6 +834,49 @@ int lsdir(const char *path, int flg) {
     perror("ls: closedir");
   }
   iput(in);
+  return 0;
+}
+
+int nlsdir(const char *path, int flg) {
+  if (!path)
+    return 1;
+
+  int fd = open(path, O_RDONLY);
+
+  uint8_t *buf = malloc(1024);
+
+  ssize_t nread = getdents(fd, (void *)buf, 1024);
+
+  if (nread == -1) {
+    return 2;
+  }
+
+  size_t off = 0;
+
+  while (off < (size_t)nread) {
+    struct nnux_dirent *d = (struct nnux_dirent *)(buf + off);
+    if (flg & 1) {
+      printkf("%8u  ", d->d_ino);
+      int d_type = d->d_type;
+      printkf("%-10s  ", (d_type == DT_REG) ? "regular" : (d_type == DT_DIR) ? "directory"
+                                                     : (d_type == DT_FIFO)  ? "FIFO"
+                                                     : (d_type == DT_SOCK)  ? "socket"
+                                                     : (d_type == DT_LNK)   ? "symlink"
+                                                     : (d_type == DT_BLK)   ? "block dev"
+                                                     : (d_type == DT_CHR)   ? "char dev"
+                                                                            : "???");
+      printkf("%4d %4d  %s\n", d->d_reclen, d->d_off, d->name);
+
+    } else
+      printkf("%s ", d->name);
+
+    off += d->d_reclen;
+  }
+  if(!(flg & 1)) printkf("\n");
+
+  free(buf);
+
+  close(fd);
   return 0;
 }
 

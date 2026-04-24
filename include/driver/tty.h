@@ -33,7 +33,13 @@ struct tty {
 
   struct tty_ops *ops;
   struct termios  termios;
+  struct vt *vt;
+
   spinlock_t      lock;
+};
+
+struct tty_struct {
+  struct tty *tty;
 };
 
 extern int stdin;

@@ -312,4 +312,7 @@ void init_root_proc() {
   // cdir will handled by fs
 
   //register_ex(sys_yield, SYS_INTNO);
+
+  kproc->signal = malloc(sizeof(struct signal_struct));
+  kproc->signal->tty = malloc(sizeof(struct tty_struct));
 }

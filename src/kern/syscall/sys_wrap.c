@@ -86,3 +86,7 @@ int dup2(int oldfd, int newfd) {
 int fstat(int fd, struct stat *statbuf) {
   return syscall(SYS_FSTAT, fd, statbuf);
 }
+
+int getdents(int fd, struct nnux_dirent *dirp, size_t count) {
+  return syscall(SYS_GETDENTS, fd, dirp, count);
+}

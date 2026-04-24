@@ -31,6 +31,15 @@
 #define PIPEBUFSIZ 128
 #define P_FREED    1
 
+#define DT_UNK  0
+#define DT_REG  1
+#define DT_DIR  2
+#define DT_CHR  3
+#define DT_BLK  4
+#define DT_FIFO 5
+#define DT_SOCK 6
+#define DT_LNK  7
+
 struct nnux_dirent;
 struct super_block;
 struct file;
@@ -49,7 +58,6 @@ typedef struct dirstream {
 
   char data[DIRENT_MAXSIZ];
 } DIR;
-
 
 // extra comments so i dont waste dynamic memory
 struct inode_ops {
@@ -81,7 +89,7 @@ struct super_ops {
   void (*put_inode)(struct inode *);
   void (*put_super)(struct super_block *);
   void (*write_super)(struct super_block *);
-  void (*statfs)(struct super_block *, struct statfs *);
+  // void (*statfs)(struct super_block *, struct statfs *);
 };
 
 struct addrspace_ops;
@@ -184,9 +192,9 @@ struct nnux_dirent {
   unsigned long d_ino;
   unsigned long d_off;
   unsigned long d_reclen;
-  char pad;
-  char d_type;
-  char name[];
+  char          pad;
+  char          d_type;
+  char          name[];
 };
 
 char *path_canon(const char *cwd, const char *path);
@@ -216,11 +224,13 @@ int     fsys_pipe(int fd[2]);
 int     fsys_dup(int oldfd);
 int     fsys_dup2(int oldfd, int newfd);
 int     fsys_fstat(int fd, struct stat *statbuf);
+int     fsys_getdents(int fd, struct nnux_dirent *dirp, size_t count);
 
 void set_dev(struct super_block *b, struct inode *root);
 
 /* library functions */
 int lsdir(const char *path, int flg);
+int nlsdir(const char *path, int flg);
 int findfreefd();
 
 #endif

@@ -27,6 +27,8 @@
 
 extern void parse_multiboot2(void *ptr);
 
+extern void vgatext_init();
+
 void setup(void *ptr) {
   //zero_bss();
   kmalloc_init();
@@ -61,8 +63,8 @@ void setup(void *ptr) {
 
   // init_devs();
   init_kbd();
-  init_tty();
-
+  //init_tty();
+  vgatext_init();
   //pic_disable();
 
   mkadv();

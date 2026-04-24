@@ -1,4 +1,5 @@
 #include "video/video.h"
+#include "ams/termbits.h"
 #include "io.h"
 #include "mem/mem.h"
 #include "syscall/syscall.h"
@@ -117,7 +118,7 @@ void printk(char *a) {
   }
 }
 
-void clr_scr() {
+void clr_scr3() {
   bottom = 0;
   cursor = 0;
   setcursor();
@@ -138,7 +139,14 @@ void vflush() {
   memcpy(VGA, vbuf + bottom * 2 * 80, 80 * 25 * 2);
 }
 
+struct terminal;
+extern struct terminal vga_textterm;
+extern void term_scroll_down(struct terminal *t);
+extern void term_scroll_up(struct terminal *t);
+
 void vscroll_down() {
+  term_scroll_up(&vga_textterm);
+  return;
   if (bottom == 25 * (V_MAXPAGE - 1))
     return;
   bottom++;
@@ -148,6 +156,8 @@ void vscroll_down() {
 }
 
 void vscroll_up() {
+  term_scroll_down(&vga_textterm);
+  return;
   if (bottom == 0)
     return;
   bottom--;

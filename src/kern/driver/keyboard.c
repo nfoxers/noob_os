@@ -8,6 +8,7 @@
 #include "fs/devfs.h"
 #include "fs/vfs.h"
 #include "io.h"
+#include "proc/proc.h"
 #include "video/printf.h"
 #include "video/video.h"
 #include <mem/mem.h>
@@ -137,8 +138,6 @@ uint8_t parse_char(uint8_t scan) {
   return scancode_map[scan];
 }
 
-struct tty ctty;
-struct device cdev;
 
 
 static void kbd_handler(struct regs *r) {
@@ -151,7 +150,7 @@ static void kbd_handler(struct regs *r) {
     // uint8_t next = (head + 1) % K_BUFSIZ;
     // kbd_buffer[head] = ch;
     // head = next;
-    tty_inputc(&ctty, ch);
+    tty_inputc(p_curproc->signal->tty->tty, ch);
   }
 
   general_eoi();
@@ -171,8 +170,12 @@ struct tty_ops cttyops = {
   .write = console_ttywrite
 };
 
+struct device cdev;
+
 void init_tty() {
   print_init("tty", "intializing /dev/tty...", 0);
+
+  static struct tty ctty;
 
   struct tty *t = alloc_tty(&cttyops);
   memcpy(&ctty, t, sizeof(*t));
@@ -186,6 +189,8 @@ void init_tty() {
 
   creat_devfs("tty", &cdev, 1, 0);
   // printkf("stdin: %d\n", stdin);
+
+  p_curproc->signal->tty->tty = &ctty;
 
   stdin = open("/dev/tty", O_RDONLY);
 

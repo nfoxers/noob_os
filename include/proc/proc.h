@@ -18,6 +18,8 @@
 
 #define MAX_CMTLEN 32
 
+struct tty_struct;
+
 struct cred {
   uid_t uid, euid, suid;
   gid_t gid, egid, sgid;
@@ -36,6 +38,16 @@ struct user {
   struct file *u_ofile[NOFILE];
 };
 
+struct sigpending {
+  struct list_head list;
+  sigset_t signal;
+};
+
+struct signal_struct {
+  struct sigpending shared_pending;
+  struct tty_struct *tty;
+};
+
 struct context {
   uint32_t esp;
   uint32_t eip;
@@ -51,6 +63,9 @@ struct proc {
 
   uint32_t p_addr;
   uint32_t p_size;
+
+  struct signal_struct *signal;
+  // sighand *
 
   struct list_head p_runn;  // run node
   struct list_head p_waitn; // wait node

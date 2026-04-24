@@ -304,9 +304,16 @@ int c_lsirq(char **argv, int argc) {
   return 0;
 }
 
+int c_nls(char **argv, int argc) {
+  ARGS_USELESS;
+  if(argc == 1)
+    return nlsdir(".", 1);
+  return nlsdir(argv[1], 1);
+}
+
 static char const *const cmds[] = {
     "help", "exit", "ls", "rm", "touch", "clear", "time", "bf", "lspci", "mkdir", "cd",
-    "cat", "mall", "h", "mused", "icach", "ipurge", "lsirq"};
+    "cat", "mall", "h", "mused", "icach", "ipurge", "lsirq", "lsn"};
 
 int c_help(char **argv, int argc) {
   ARGS_USELESS;
@@ -322,7 +329,7 @@ int c_help(char **argv, int argc) {
 
 static int (*const ftab[])(char *argv[NARGS], int argc) = {
     c_help, c_exit, c_ls, c_rm, c_touch, c_clear, c_time, c_bf, c_lspci, c_mkdir, c_cd,
-    c_cat, c_mall, c_h, c_mused, c_icach, c_ipurge, c_lsirq};
+    c_cat, c_mall, c_h, c_mused, c_icach, c_ipurge, c_lsirq, c_nls};
 
 void shell() {
   printkf("note: creds are root/toor or user w no pass\n");
