@@ -69,7 +69,7 @@ build/kern.elf: $(OBJ)
 	$(LD) $(LDFLAGS) $^ -o $@
 
 build/libc.a: $(OBJlc)
-	rm $@
+	rm -f $@
 	$(AR) rcs $@ $^
 
 

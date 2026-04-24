@@ -7,7 +7,6 @@
 #include <fs/ext2.h>
 #include <mem/mem.h>
 #include <proc/proc.h>
-#include <stdio.h>
 
 // ! todo: partition support
 
