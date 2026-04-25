@@ -254,15 +254,17 @@ void login() {
     if(r && !(i->pass_req & 1)) goto yes;
 
     struct termios t;
+    struct termios orig;
     tcgetattr(0, &t);
+    memcpy(&orig, &t, sizeof(t));
+
     t.c_lflag &= ~(ECHO);
     tcsetattr(0, TCSANOW, &t);
 
     printkf("password for %s: ", buf);
     kgets(psw, MAXUSERLEN);
 
-    t.c_lflag |= ECHO;
-    tcsetattr(0, TCSANOW, &t);
+    tcsetattr(0, TCSANOW, &orig);
 
     r = chkcred(buf, psw, i);
     if(r == 0) {

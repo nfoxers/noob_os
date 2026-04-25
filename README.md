@@ -4,10 +4,14 @@ this is undoubtedly the most useless bootable software in the world.
 
 aanyways just run `make` and bin/os.img should pop up. in addition, `make run` should run the executable (using qemu-system-i386).
 
-currently the kernel is about 35KB in size, has vfs and part-working kernel mode "shell" (unfun commands). nothing interesting, though.
+### synopsis
+currently the kernel is about 40 kB in size, has vfs and part-working kernel mode "shell" (unfun commands). nothing interesting, though.  
 
-*i must stress that this hobby project does not have and will never have any production usability*
+also it uses grub as a bootloader (see `grub/initdsk.img`) and is compressed using LZMA, thus resulting in a 22 kB compressed elf image, and
 
+*i must stress that this hobby project does not have and will never have any production usability.*
+
+#### technical details
 prerequisites you *must* have before compiling:
 ```
 clang
@@ -17,50 +21,27 @@ llvm
 mtools
 qemu-system-i386
 python3 (optional)
+e2tools
+xz
 ```
 while others, `find`, `truncate`, et cetera are assumed to already be on your system  
 
 and this might be the current memory map:
 ```
-low memory
-+==============+ 0x000FFFFF
-|              |
-| other data   |
-+- - - - - - - + ????
-|              |
-|              |
-|              | 
-| kernel       | 
-+--------------+ 0x9400 26.3 KiB
-|              |
-| root dirs    | 
-+--------------+ 0x8600 3584 B
-|              |
-| FAT12 table  | 
-+--------------+ 0x7e00 2048 B
-| bootstrap    | 
-+--------------+ 0x7c00 512 B
-| kernel stack | 
-+- - - - - - - + ????
-|              |
-| proc stack   |
-+--------------+ __bss_end__
-|              |
-| BSS segment  | 
-+--------------+ 0x0500 30,4 KB
-| BIOS stuff   | 
-+==============+ 0x0000 1280 B
-```
-```
 high memory
-+==============+ ????
++==============+
 |              |
 | stuff?       |
-+- - - - - - - + 0x00200000
++--------------+ 0x00300000
 |              |
 |              |
 |              |
-| kernel heap  |
+| kernel heap  | ≈ 60KB
++- - - - - - - + 0x00200000 1 MiB
+|              |
+|              |
+| uncompressed |
+| kernel text  |
 +==============+ 0x00100000 1 MiB
 
 ```
@@ -69,13 +50,17 @@ high memory
 fun fact: i specifically used `clang` and the llvm toolchain instead of a gcc cross compiler so that i can compile the project on my mobile phone (via termux), where there cross compilers are the hardest and most painful to install!
 
 ## screenshot
-### 04/12 (acdf7f)
+### 04/12 (acdf7f2)
+
+FAT12 filesystem thing
 
 ![boot image thing](./screenshot/0412.png)
 
 ![file operations thing](./screenshot/0412_fops.png)
 
 ### 04/19 (0c9a8cb)
+
+still chubby, but added /etc files (see `data/`)
 
 ![login screen :3](./screenshot/0419.png)
 

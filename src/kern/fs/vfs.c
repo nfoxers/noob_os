@@ -1,4 +1,5 @@
 #include "fs/vfs.h"
+#include "ams/bits/struct_stat.h"
 #include "crypt/crypt.h"
 #include "lib/list.h"
 #include "mem/mem.h"
@@ -10,7 +11,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-extern struct inode rootnode;
+struct inode rootnode;
+struct mount rootmnt;
 
 #define HITAB_MAX 64
 
@@ -82,10 +84,7 @@ char *path_canon(const char *cwd, const char *path) {
 
 /* vfs internals */
 
-dev_t nextdev = 0;
-
 void set_dev(struct super_block *b, struct inode *root) {
-  b->s_dev       = nextdev++;
   b->s_root      = root;
   b->generic_sbp = NULL;
 
@@ -349,7 +348,7 @@ struct inode *lookup_vfs_i(char *pth) {
 
     iput(tmp);
     // printkf("inode (iget): %x freed: %x\n", inode, tmp);
-    if (inode->iflags & IN_MOUNT) {
+    if (inode->iflags & IN_MOUNT && inode->mnt && inode->mnt->sb) {
       // printkf("inode is a mount\n");
       // inode = inode->mnt->sb->s_root;
       struct inode *t = inode;
@@ -729,6 +728,8 @@ int fsys_fstat(int fd, struct stat *statbuf) {
   if (!f->inode)
     return -EBADF;
 
+  memset(statbuf, 0, sizeof *statbuf);
+
   struct inode *in = f->inode;
   statbuf->st_ino  = in->ino;
   statbuf->st_mode = in->mode;
@@ -736,6 +737,8 @@ int fsys_fstat(int fd, struct stat *statbuf) {
   statbuf->st_uid = in->uid;
   statbuf->st_gid = in->gid;
   statbuf->st_dev = in->sb->s_dev;
+  statbuf->st_blksize = in->blksiz;
+  statbuf->st_blocks = in->blkcount;
   // ! expand!!
 
   return 0;
@@ -875,6 +878,26 @@ int nlsdir(const char *path, int flg) {
   if(!(flg & 1)) printkf("\n");
 
   free(buf);
+
+  close(fd);
+  return 0;
+}
+
+int flstat(const char *name) {
+  int fd = open(name, O_RDONLY);
+  if(fd < 0) {
+    perror("cant stat:");
+    return 1;
+  }
+
+  struct stat stat;
+  fstat(fd, &stat);
+
+  printkf("  file: %s\n", name);
+  printkf("  size: %u     blocks: %d\n", stat.st_size, stat.st_blocks);
+  printkf("device: %d,%d", MAJOR(stat.st_dev), MINOR(stat.st_dev));
+  printkf("  inode: %d\n", stat.st_ino);
+  printkf("access: (%03x)  uid: %d gid: %d\n", stat.st_mode & 0777, stat.st_uid, stat.st_gid);
 
   close(fd);
   return 0;

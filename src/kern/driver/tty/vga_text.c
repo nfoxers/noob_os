@@ -117,7 +117,7 @@ ssize_t vga_ttywrite(struct tty *t, const char *buf, size_t c) {
   (void)t;
   for (size_t i = 0; i < c; i++) {
     vt_process(t->vt, buf[i]);
-    vga_setcursor(t->vt->t, t->vt->t->cursor_x, t->vt->t->cursor_y - t->vt->t->scroll_top);
+    //vga_setcursor(t->vt->t, t->vt->t->cursor_x, t->vt->t->cursor_y - t->vt->t->scroll_top);
   }
   return c;
 }
@@ -161,7 +161,7 @@ void vgatext_init() {
   memcpy(&vgdev, d, sizeof(*d));
   free(d);
 
-  creat_devfs("tty", &vgdev, 1, 0);
+  creat_devfs("tty", &vgdev, 4, 0);
   // printkf("stdin: %d\n", stdin);
 
   vgtty.vt                    = &vga_vt;

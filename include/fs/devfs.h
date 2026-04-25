@@ -18,19 +18,13 @@ struct dev_ops {
   int (*ioctl)(struct device *d, int op, void *arg);
 };
 
-struct devidx {
-  uint16_t maj;
-  uint16_t min;
-};
-
 struct device {
   const char *name;
-  const struct devidx *idx;
+  dev_t devt;
   size_t off;
   void *pdata;
 
   struct dev_ops ops;
-
 };
 
 struct inode *creat_devfs(const char *name, struct device *d, uint16_t maj, uint16_t min);

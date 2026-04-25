@@ -152,7 +152,7 @@ int ata_init(void) {
 
   ext2_init(&atamaster);
 
-  creat_devfs("sda", &ata_dev, 2, 0);
+  creat_devfs("sda", &ata_dev, 8, 0);
 
   return 1;
 }

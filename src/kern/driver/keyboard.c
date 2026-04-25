@@ -94,13 +94,19 @@ uint8_t parse_char(uint8_t scan) {
     if (!press)
       return 0;
 
-    if (scan == 0x49) {
-      vscroll_up();
+    if (scan == 0x49) { // page up
+      tty_outputc(p_curproc->signal->tty->tty, '\e');
+      tty_outputc(p_curproc->signal->tty->tty, '[');
+      tty_outputc(p_curproc->signal->tty->tty, '5');
+      tty_outputc(p_curproc->signal->tty->tty, '~');
       return 0;
     }
 
-    if (scan == 0x51) {
-      vscroll_down();
+    if (scan == 0x51) { // page down
+      tty_outputc(p_curproc->signal->tty->tty, '\e');
+      tty_outputc(p_curproc->signal->tty->tty, '[');
+      tty_outputc(p_curproc->signal->tty->tty, '6');
+      tty_outputc(p_curproc->signal->tty->tty, '~');
       return 0;
     }
   }
@@ -266,6 +272,7 @@ int kgets(char *s, uint16_t siz) {
   char     c   = 0;
   uint16_t idx = 0;
   while (((c = getch()) != '\n') && (c != EOF)) {
+
     if (idx >= siz)
       break;
     if (c != '\b') {

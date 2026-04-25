@@ -9,6 +9,7 @@
 
 #include "ams/sys/stat.h"
 #include "dev/block_dev.h"
+#include <sys/types.h>
 
 #define F_USED 0x1000
 #define F_ADDR 0x0008
@@ -39,6 +40,10 @@
 #define DT_FIFO 5
 #define DT_SOCK 6
 #define DT_LNK  7
+
+#define MKDEV(M, m) ((((M) & 0xfff) << 8) | (((m) & 0xff)) | (((m) & ~0xff) << 12))
+#define MAJOR(d) (((d) >> 8) & 0xfff)
+#define MINOR(d) (((d) & 0xff) | (((d) >> 12) & 0xfff00))
 
 struct nnux_dirent;
 struct super_block;
@@ -143,9 +148,13 @@ struct inode {
 
   ino_t ino;
   dev_t dev;
+  dev_t rdev;
 
   uid_t uid;
   gid_t gid;
+
+  blksize_t blksiz;
+  blkcnt_t blkcount;
 
   unsigned short refs;
 
@@ -231,6 +240,7 @@ void set_dev(struct super_block *b, struct inode *root);
 /* library functions */
 int lsdir(const char *path, int flg);
 int nlsdir(const char *path, int flg);
+int flstat(const char *name);
 int findfreefd();
 
 #endif

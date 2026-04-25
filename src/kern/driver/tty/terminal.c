@@ -20,7 +20,9 @@ void term_set_cursor(struct terminal *t, int x, int y) {
 }
 
 void term_scroll_absolute(struct terminal *t) {
+  
   memcpy(t->cbuf, t->cbuf + t->width, t->width * t->height * sizeof(*t->cbuf));
+  memset(t->cbuf + (t->height) * t->width, 0, sizeof(*t->cbuf) * t->width);
   if (t->cops && t->cops->flush) {
     t->cops->flush(t);
     term_set_cursor(t, t->cursor_x, t->cursor_y);
@@ -118,6 +120,8 @@ void term_putc(struct terminal *t, char c) {
   default:
     term_putc_raw(t, c);
   }
+
+  t->cops->set_cursor(t, t->cursor_x, t->cursor_y);
 
   // if(t->cursor_y >= t->scroll_top + t->height) t->scroll_top++;
 }

@@ -39,6 +39,9 @@ void term_putc(struct terminal *t, char c);
 void term_newline(struct terminal *t);
 void term_bkspace(struct terminal *t);
 
+void term_scroll_down(struct terminal *t);
+void term_scroll_up(struct terminal *t);
+
 /* VT100 subsystem */
 
 enum vt_state {

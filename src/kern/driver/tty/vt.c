@@ -58,15 +58,28 @@ void vt_setattr(struct vt *vt) {
   term->bg = bg_pending;
 }
 
+void vt_scroll(struct vt *vt, int v) {
+  switch (v) {
+    case 5:
+      term_scroll_down(vt->t);
+      break;
+    case 6:
+      term_scroll_up(vt->t);
+      break;
+  }
+}
+
 void vt_dispatch(struct vt *vt, char c) {
+  //printkf("c: %x\n", c);
   switch (c) {
     case 'm': // attribute mode set
     vt_setattr(vt);
     break;
+    case '~':
+    vt_scroll(vt, vt->params[0]);
+    break;
   }
 }
-
-extern void _putchr(char c);
 
 void vt_process(struct vt *vt, char c) {
   switch(vt->s) {

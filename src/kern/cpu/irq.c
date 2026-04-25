@@ -126,7 +126,7 @@ void show_interrupts() {
   for(int i = 0; i < MAX_DESC; i++) {
     struct irq_desc *dsc = &irq_descs[i];
     if(dsc->flg & DESC_EXISTS) {
-      printkf("% 2d: % 4d", i, dsc->count);
+      printkf("% 2d: % 8d", i, dsc->count);
       printkf("% 8s% 5d-", dsc->chipname, dsc->irq);
       printkf("%-7s %c %s\n", getflow(dsc->flg), getpol(dsc->flg), dsc->name);
     }

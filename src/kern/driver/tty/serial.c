@@ -89,7 +89,7 @@ void init_ttys0() {
   free(dev_tmp);
 
   // register_dev(1, 0, &uartdev);
-  creat_devfs("ttyS0", &uartdev, 1, 1); // dev (1, 0) has been used for the kbd
+  creat_devfs("ttyS0", &uartdev, 4, 1);
 }
 
 void set_baud(uint32_t freq) {

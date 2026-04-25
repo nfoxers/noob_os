@@ -36,7 +36,7 @@ DEP_EXTRA := Makefile grub/grub.cfg $(DATA)
 
 .PHONY: clean run debug size size2
 
-all: bin/os.img size
+all: size bin/os.img 
 
 bin/os.img: build/kern.elf build/user.elf $(DEP_EXTRA)
 	@mkdir -p bin
@@ -54,13 +54,6 @@ bin/os.img: build/kern.elf build/user.elf $(DEP_EXTRA)
 	e2mkdir $@:/dev
 	e2mkdir -P 666 $@:/root
 	e2mkdir $@:/home/user
-
-build/boot.bin: src/boot/boot.asm
-	@mkdir -p build
-	$(AS) -fbin $< -o $@
-
-build/kern.bin: build/kern.elf
-	llvm-objcopy -O binary $< $@
 
 build/user.elf: $(OBJu) build/libc.a
 	$(LD) $(LDFLAGSu) $^ -o $@
@@ -105,10 +98,9 @@ run: bin/os.img
 debug: bin/os.img
 	qemu-system-i386 -s -S $(QMFLAGS) -drive format=raw,file=$<,if=ide
 
-size: tools/chksiz.py
-	@echo --------------
-	@python3 $<
-	@llvm-size build/kern.elf
+size: build/kern.elf
+	@echo ---------------------------------
+	@llvm-size $<
 
 size2: bin/os.img
 	@llvm-objdump -t build/kern.elf | awk '{ dec = strtonum("0x"$$5); print dec, $$0 }' | sort -n

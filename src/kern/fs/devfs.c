@@ -66,20 +66,17 @@ struct inode *creat_devfs(const char *name, struct device *dev, uint16_t maj, ui
   in->fops = &dev_fops;
   in->refs = 1;
 
-  struct devidx *didx = malloc(sizeof(struct devidx));
-  didx->maj           = maj;
-  didx->min           = min;
-
-  in->pdata = didx;
-  dev->idx = didx;
+  in->rdev = MKDEV(maj, min);
+  dev->devt = in->rdev;
   dir_add(&devfs_root, name, in);
   //iadd(in);
   return in;
 }
 
 struct device *getdev(struct inode *in) {
-  struct devidx *d = in->pdata;
-  return chrdev_tab[d->maj][d->min];
+  uint16_t maj = MAJOR(in->rdev);
+  uint16_t min = MINOR(in->rdev);
+  return chrdev_tab[maj][min];
 }
 
 /* devfs ops */
@@ -178,14 +175,16 @@ struct super_ops dev_sops = {
 
 ssize_t read_null(struct device *d, void *buf, size_t count) {
   //printkf("min: %d\n", d->idx->min);
-  if(d->idx->min == 1) {
+  uint16_t min = MINOR(d->devt);
+
+  if(min == 1) {
     return 0;
   }
-  if(d->idx->min == 2) {
+  if(min == 2) {
     memset(buf, 0, count);
     return count;
   }
-  if(d->idx->min == 3) {
+  if(min == 3) {
     size_t siz = count;
     size_t off = 0;
     while(siz > 4) {
@@ -235,11 +234,14 @@ void init_devs() {
   devnode.pdata = &devfs_root;
 
   devblock.s_op = &dev_sops;
+  devblock.s_blocksize = 4096;
+  devblock.s_magic = 'DEV ';
+  devblock.s_dev = 0;
   set_dev(&devblock, &devnode);
 
-  creat_devfs("null", &nulldev, 0, 1);
-  creat_devfs("zero", &zerodev, 0, 2);
-  creat_devfs("random", &randdev, 0, 3);
+  creat_devfs("null", &nulldev, 1, 1);
+  creat_devfs("zero", &zerodev, 1, 2);
+  creat_devfs("random", &randdev, 1, 3);
 }
 
 /* syscall abstraction */

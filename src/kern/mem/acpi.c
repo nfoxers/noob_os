@@ -21,11 +21,11 @@ void *_get_tab(char sig[4], struct acpi_rsdt *r) {
 }
 
 void scan_acpi() {
+
   char *addr = (void *)(uintptr_t)(*(uint16_t *)0x40e << 4);
 
   for (size_t i = 0; i < 1024 * 1024; i += 16) {
     if (!memcmp(addr + i, "RSD PTR ", 8)) {
-      //printkf("acpi1 found at %x\n", addr + i);
       addr = addr + i;
       goto fond;
     }
@@ -33,24 +33,13 @@ void scan_acpi() {
 
   for (addr = (char *)0xe0000; addr < (char *)0xfffff; addr += 16) {
     if (!memcmp(addr, "RSD PTR ", 8)) {
-      //printkf("acpi2 found at %x\n", addr);
       goto fond;
     }
   }
 
 fond:;
   struct acpi_rsdp *r = (struct acpi_rsdp *)addr;
-  //printkf("rsdp rev: %p\n", r);
   rsdt = (struct acpi_rsdt *)r->rsdt_addr;
-  //printkf("rsdt rev: %p\n", d->ptr[0]);
-
-  /*
-  printkf("AML code: \n");
-  for(size_t i = 0; i < dsdt->h.len - sizeof(dsdt->h); i++) {
-    printkf("0x%02x ", dsdt->aml[i]);
-  }
-  printkf("\n");
-  */
 
   return;
 }

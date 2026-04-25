@@ -175,3 +175,8 @@ void init_video() {
   c_att = 0x0f;
   printkf("video initialized\n");
 }
+
+void dealloc_legacy_video() {
+  free(vbuf);
+  vbuf = 0;
+}

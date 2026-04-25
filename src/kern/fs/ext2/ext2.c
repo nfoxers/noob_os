@@ -197,14 +197,16 @@ void ext2_inoder(struct inode *in) {
   struct ext2_inode tmp;
   ext2_read_ino(in->sb->s_disk, ino, &tmp);
 
-  in->gid   = tmp.i_gid;
-  in->uid   = tmp.i_uid;
-  in->mode  = tmp.i_mode;
-  in->pdata = &atamaster;
-  in->sb    = &g_ext2_sb;
-  in->fops  = &ext2_fops;
-  in->ops   = &ext2_iops;
-  in->size  = tmp.i_size;
+  in->gid      = tmp.i_gid;
+  in->uid      = tmp.i_uid;
+  in->mode     = tmp.i_mode;
+  in->pdata    = &atamaster;
+  in->sb       = &g_ext2_sb;
+  in->fops     = &ext2_fops;
+  in->ops      = &ext2_iops;
+  in->size     = tmp.i_size;
+  in->blkcount = tmp.i_blocks;
+  in->blksiz   = e2sb.block_siz;
 }
 
 struct inode_ops ext2_iops = {
@@ -250,15 +252,18 @@ void ext2_init(struct gendisk *gd) {
 
   // printkf("block: %d\n", S_ISDIR(root.i_mode));
 
-  g_ext2_sb.s_dev  = 0;
-  g_ext2_sb.s_op   = &ext2_sops;
-  g_ext2_sb.s_disk = gd;
+  g_ext2_sb.s_dev       = MKDEV(8, 0);
+  g_ext2_sb.s_magic     = ext2_sb.s_magic;
+  g_ext2_sb.s_blocksize = e2sb.block_siz;
+  g_ext2_sb.s_op        = &ext2_sops;
+  g_ext2_sb.s_disk      = gd;
 
   rootnode.sb    = &g_ext2_sb;
+  rootnode.dev   = g_ext2_sb.s_dev;
   rootnode.gid   = 0;
   rootnode.uid   = 0;
   rootnode.ino   = 2;
-  rootnode.size  = 0;
+  rootnode.size  = e2sb.block_siz;
   rootnode.mode  = S_IFDIR | 0766;
   rootnode.pdata = gd;
   rootnode.ops   = &ext2_iops;

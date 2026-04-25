@@ -135,6 +135,7 @@ void set_apic() {
   print_init("apic", "initializing the apic...", 0);
 
   set_apic_base(get_apic_base());
+  print_info("lapic", 0, "apic base: %p", get_apic_base());
   lapic_write(0xf0, lapic_read(0xf0) | 0x100);
 }
 
@@ -144,8 +145,9 @@ void ioapic_init() {
   print_init("ioapic", "initializing the io apic...", 0);
 
   parse_madt();
-
   pic_disable();
+  print_info("pic", 1, "disabled pics");
+  print_info("addr", 0, "ioapic base: %p", ioapic_addr);
 
   ioapic_set_irq(0, 32); // timer
   ioapic_set_irq(1, 33); // kbd
