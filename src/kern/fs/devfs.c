@@ -9,7 +9,7 @@
 #include <stdint.h>
 #include "crypt/crypt.h"
 
-#define MAXMAJ 5
+#define MAXMAJ 10
 #define MAXMIN 5
 
 #define NODEVFS (MAXMAJ * MAXMIN)
@@ -24,6 +24,8 @@ struct dir_data devfs_root;
 struct super_block devblock;
 struct inode devnode;
 struct mount devmnt;
+
+int next_dev = 0;
 
 void dir_add(struct dir_data *dir, const char *name, struct inode *in) {
   struct dir_entry *dent = dir->entry;
@@ -61,7 +63,7 @@ struct inode *creat_devfs(const char *name, struct device *dev, uint16_t maj, ui
   struct inode *in = malloc(sizeof(struct inode));
 
   in->mode = S_IFCHR | 0666;
-  in->ino = maj << 16 | min;
+  in->ino = next_dev++;
   in->sb = &devblock;
   in->fops = &dev_fops;
   in->refs = 1;
@@ -238,6 +240,8 @@ void init_devs() {
   devblock.s_magic = 'DEV ';
   devblock.s_dev = 0;
   set_dev(&devblock, &devnode);
+
+  next_dev++;
 
   creat_devfs("null", &nulldev, 1, 1);
   creat_devfs("zero", &zerodev, 1, 2);

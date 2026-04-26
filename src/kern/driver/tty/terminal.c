@@ -25,14 +25,14 @@ void term_scroll_absolute(struct terminal *t) {
   memset(t->cbuf + (t->height) * t->width, 0, sizeof(*t->cbuf) * t->width);
   if (t->cops && t->cops->flush) {
     t->cops->flush(t);
-    term_set_cursor(t, t->cursor_x, t->cursor_y);
+    //term_set_cursor(t, t->cursor_x, t->cursor_y);
   }
 }
 
 void term_scroll_up(struct terminal *t) {
   if(t->scroll_top + t->dheight >= t->height) {
     term_scroll_absolute(t);
-    t->cursor_y--;
+    //t->cursor_y--;
     term_set_cursor(t, t->cursor_x, t->cursor_y);
     return;
   }

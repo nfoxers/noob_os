@@ -2,100 +2,105 @@
 #include "fs/devfs.h"
 #include "fs/vfs.h"
 #include "video/printf.h"
+#include "video/video.h"
 #include <dev/block_dev.h>
 #include <driver/disk/ide.h>
 #include <fs/ext2.h>
 #include <mem/mem.h>
 #include <proc/proc.h>
 
+#define DIV_ROUND_UP(n, d) (((n) + (d) - 1) / (d))
+
 // ! todo: partition support
-
-extern struct gendisk atamaster;
-
-struct ext2_superblock ext2_sb;
-struct ext2_blockgroup ext2_bg;
-
-struct super_block sb_ext2;
-
-struct ext2info_sb {
-  uint32_t block_siz;
-};
-
-struct ext2info_sb e2sb;
-
 /* vfs interface */
-
-struct super_block  g_ext2_sb;
-extern struct inode rootnode;
 
 struct inode_ops ext2_iops;
 struct file_ops  ext2_fops;
 struct super_ops ext2_sops;
 
-extern struct proc *volatile p_curproc;
+struct ext2_sb_info *e2sbinfo(struct block_dev *bd) {
+  if(!bd || !bd->bd_sb || !bd->bd_sb->generic_sbp) {
+    return NULL;
+  }
 
-extern struct super_block devblock;
-extern struct inode       devnode;
-extern struct mount       devmnt;
+  return bd->bd_sb->generic_sbp;
+}
 
-void ext2_read(struct gendisk *gd, uint32_t block, uint32_t blkcount, void *buf) {
-  uint32_t siz   = e2sb.block_siz;
+struct ext2_inode_info *e2ininfo(struct inode *in) {
+  if(!in || !in->pdata) {
+    return NULL;
+  }
+
+  return in->pdata;
+}
+
+void ext2_read(struct block_dev *bd, uint32_t block, uint32_t blkcount, void *buf) {
+  uint32_t siz   = bd->bd_sb->s_blocksize;
   uint32_t lba   = block * siz / 512;
   uint32_t count = blkcount * siz / 512;
   // printkf("lba: %d - %d\n", lba, count);
-  gd->bops->read(lba, count, buf);
+  bread(bd, lba, count, buf);
 }
 
-int ext2_bitmap_test(struct gendisk *gd, uint32_t index) {
+int ext2_bitmap_test(struct block_dev *bd, uint32_t index) {
+  uint32_t group  = index / e2sbinfo(bd)->s_inodes_per_group;
+  index %= e2sbinfo(bd)->s_inodes_per_group;
+
   uint32_t byte = index >> 3;
   uint32_t bit  = index & 7;
-  uint8_t *buf  = malloc(e2sb.block_siz);
-  // printkf("blk: %d\n", ext2_bg.bg_free_inodes_count);
-  ext2_read(gd, ext2_bg.bg_inode_bitmap, 1, buf);
-  int v = (buf[byte] >> bit) & 1;
-  free(buf);
+  uint8_t *buf  = e2sbinfo(bd)->s_block_bitmap[group];
 
-  // printkf("status for ino %d: %d\n", index, v);
+  int v = (buf[byte] >> bit) & 1;
+
+  //printkf("status for ino %d: %d\n", index, v);
   return v;
 }
 
-int ext2_read_ino(struct gendisk *gd, int32_t ino, struct ext2_inode *out) {
-  uint32_t itab = ext2_bg.bg_inode_table;
-  uint32_t isiz = ext2_sb.s_inode_siz;
+int ext2_read_ino(struct block_dev *bd, int32_t ino, struct ext2_inode *out) {
+
+  //ext2_bitmap_test(bd, ino);
+
+  struct ext2_sb_info *sb = e2sbinfo(bd);
+  uint32_t group = ino / sb->s_inodes_per_group;
+  ino %= sb->s_inodes_per_group;
+
+  uint32_t itab = sb->s_group_desc[group]->bg_inode_table;
+  
+  uint32_t isiz = sb->s_inode_size;
   uint32_t off  = (ino - 1) * isiz;
 
-  uint32_t blk  = itab + (off / e2sb.block_siz);
-  uint32_t boff = off % e2sb.block_siz;
+  uint32_t blk  = itab + (off / sb->s_block_size);
+  uint32_t boff = off % sb->s_block_size;
 
-  uint8_t *buf = malloc(e2sb.block_siz);
-  ext2_read(gd, blk, 1, buf);
+  uint8_t *buf = malloc(sb->s_block_size);
+  ext2_read(bd, blk, 1, buf);
   memcpy(out, buf + boff, sizeof(*out));
   free(buf);
+
   return 0;
 };
 
 ino_t ext2_lookup(struct inode *in, const char *name) {
-  ino_t ino = in->ino;
-  if (!ext2_bitmap_test(in->sb->s_disk, ino)) {
-    return -1;
-  }
-  struct ext2_inode tmp;
-  ext2_read_ino(in->sb->s_disk, ino, &tmp);
+  struct ext2_inode_info *t = e2ininfo(in);
+  //struct ext2_sb_info *sb = in->sb;
 
-  uint8_t *buf = malloc(e2sb.block_siz);
-  ext2_read(in->pdata, tmp.i_block[0], 1, buf);
+  uint32_t blocksiz = in->sb->s_blocksize;
+  uint8_t *buf = malloc(blocksiz);
   ino_t ino_found = -1;
 
   for (int i = 0; i < 12; i++) {
-    if (tmp.i_block[i] == 0)
+    if (t->i_block[i] == 0) {
+
       continue;
+    }
+      
+    ext2_read(in->sb->s_bdev, t->i_block[i], 1, buf);
 
     uint32_t off = 0;
-    while (off < e2sb.block_siz) {
-      struct ext_direntry *ent = (struct ext_direntry *)(buf + off);
+    while (off < blocksiz) {
+      struct ext2_direntry *ent = (struct ext2_direntry *)(buf + off);
 
       if (ent->d_ino != 0) {
-        // printkf("%s\n", ent->name);
         if (ent->d_name_len == strlen(name) && memcmp(ent->name, name, ent->d_name_len) == 0) {
           ino_found = ent->d_ino;
           goto done;
@@ -117,6 +122,7 @@ ssize_t ext2_lread(struct file *file, void *buf, size_t siz) {
   struct inode *in = file->inode;
 
   uint32_t off = file->position;
+  uint32_t blocksiz = in->sb->s_blocksize;
 
   if (off > in->size)
     return 0;
@@ -127,20 +133,20 @@ ssize_t ext2_lread(struct file *file, void *buf, size_t siz) {
   size_t read = 0;
 
   struct ext2_inode ein;
-  ext2_read_ino(in->sb->s_disk, in->ino, &ein);
+  ext2_read_ino(in->sb->s_bdev, in->ino, &ein);
 
-  uint8_t *buff = malloc(e2sb.block_siz);
+  uint8_t *buff = malloc(blocksiz);
   while (read < siz) {
     uint32_t pos      = off + read;
-    uint32_t boff     = pos % e2sb.block_siz;
-    uint8_t  blockptr = pos / e2sb.block_siz;
+    uint32_t boff     = pos % blocksiz;
+    uint8_t  blockptr = pos / blocksiz;
     uint32_t blk      = ein.i_block[blockptr];
 
     if (blk == 0)
       break;
 
-    ext2_read(in->sb->s_disk, blk, 1, buff);
-    uint32_t dcount = e2sb.block_siz - boff;
+    ext2_read(in->sb->s_bdev, blk, 1, buff);
+    uint32_t dcount = blocksiz - boff;
     if (dcount > (siz - read))
       dcount = siz - read;
 
@@ -157,22 +163,23 @@ ssize_t ext2_lread(struct file *file, void *buf, size_t siz) {
 ssize_t ext2_readdir(struct file *file, struct nnux_dirent *dirp, size_t count) {
   struct inode *in = file->inode;
 
-  struct ext2_inode e2in;
-  ext2_read_ino(in->sb->s_disk, in->ino, &e2in);
+  struct ext2_inode_info *inf = e2ininfo(in);
 
-  uint8_t *buf     = malloc(e2sb.block_siz);
+  uint8_t *buf     = malloc(in->sb->s_blocksize);
+  uint32_t blocksiz = in->sb->s_blocksize;
   uint8_t  blk_ptr = 0;
 
   size_t read = 0;
   while (blk_ptr < 12) {
-    if (e2in.i_block[blk_ptr] == 0) {
+    if (inf->i_block[blk_ptr] == 0) {
       blk_ptr++;
       continue;
     }
-    ext2_read(in->sb->s_disk, e2in.i_block[blk_ptr], 1, buf);
+
+    ext2_read(in->sb->s_bdev, inf->i_block[blk_ptr], 1, buf);
     size_t off = 0;
-    while (off < e2sb.block_siz && read < count) {
-      struct ext_direntry *dirent = (struct ext_direntry *)(buf + off);
+    while (off < blocksiz && read < count) {
+      struct ext2_direntry *dirent = (struct ext2_direntry *)(buf + off);
       struct nnux_dirent  *cur    = (struct nnux_dirent *)((uint8_t *)dirp + read);
 
       if (dirent->d_ino != 0) {
@@ -195,18 +202,33 @@ ssize_t ext2_readdir(struct file *file, struct nnux_dirent *dirp, size_t count) 
 void ext2_inoder(struct inode *in) {
   ino_t             ino = in->ino;
   struct ext2_inode tmp;
-  ext2_read_ino(in->sb->s_disk, ino, &tmp);
+  ext2_read_ino(in->sb->s_bdev, ino, &tmp);
+
+  struct ext2_inode_info *inf = malloc(sizeof(*inf));
+  memcpy(inf->i_block, tmp.i_block, sizeof(tmp.i_block));
+  inf->i_blocks = tmp.i_blocks;
 
   in->gid      = tmp.i_gid;
   in->uid      = tmp.i_uid;
   in->mode     = tmp.i_mode;
-  in->pdata    = &atamaster;
-  in->sb       = &g_ext2_sb;
+  in->pdata    = inf;
+  in->sb       = in->sb;
   in->fops     = &ext2_fops;
   in->ops      = &ext2_iops;
   in->size     = tmp.i_size;
   in->blkcount = tmp.i_blocks;
-  in->blksiz   = e2sb.block_siz;
+  in->blksiz   = in->sb->s_blocksize;
+}
+
+void ext2_putin(struct inode *in) {
+  free(in->pdata);
+}
+
+void ext2_putsb(struct super_block *sb) {
+  struct ext2_sb_info *inf = sb->generic_sbp;
+  // ! todo: free all inf objects
+
+  free(inf);
 }
 
 struct inode_ops ext2_iops = {
@@ -217,60 +239,65 @@ struct file_ops ext2_fops = {
     .readdir = ext2_readdir};
 
 struct super_ops ext2_sops = {
-    .read_inode = ext2_inoder};
+    .read_inode = ext2_inoder,
+  .put_inode = ext2_putin};
 
-void set_special() {
-  init_devs();
-
-  fsino_t dev_fs = ext2_lookup(&rootnode, "dev");
-  // printkf("devfs ino: %d\n", dev_fs);
-  struct inode *in = iget(&g_ext2_sb, dev_fs);
-  imount(in, &devmnt);
-}
-
-void ext2_init(struct gendisk *gd) {
+void ext2_init(struct block_dev *bd, struct super_block *sb) {
   uint8_t *buf = malloc(1024);
-  gd->bops->read(2, 2, (void *)buf);
-  memcpy(&ext2_sb, buf, sizeof(ext2_sb));
+  struct ext2_superblock e2sb;
+
+  bread(bd, 2, 2, buf);
+  memcpy(&e2sb, buf, sizeof(e2sb));
   free(buf);
 
-  if (ext2_sb.s_magic != EXT2_SUPER_MAGIC) {
+  if (e2sb.s_magic != EXT2_SUPER_MAGIC) {
     printkf("not an ext2 fs\n");
     return;
   }
 
-  e2sb.block_siz = 1024 << ext2_sb.s_log_block_siz;
 
-  buf = malloc(e2sb.block_siz);
-  ext2_read(gd, e2sb.block_siz > 1024 ? 1 : 2, 1, buf);
-  memcpy(&ext2_bg, buf, sizeof(ext2_bg));
-  free(buf);
+  struct ext2_sb_info *info = malloc(sizeof(*info));
+  uint32_t off = 0;
+  
+  bd->bd_sb = sb;
+  sb->s_blocksize = 1024 << e2sb.s_log_block_siz;
+  sb->s_bdev = bd;
+  sb->s_dev = bd->bd_dev;
+  sb->s_disk = bd->bd_disk;
+  sb->s_magic = EXT2_SUPER_MAGIC;
+  sb->s_op = &ext2_sops;
+  sb->s_inext = 3;
+  sb->generic_sbp = info;
+  info->s_block_size = sb->s_blocksize;
+  info->s_blocks_per_group = e2sb.s_blocks_per_group;
+  info->s_group_count = DIV_ROUND_UP(e2sb.s_blocks_count, e2sb.s_blocks_per_group);
+  info->s_inode_size = e2sb.s_inode_siz;
+  info->s_inodes_per_group = e2sb.s_inodes_per_group;
+  
+  uint8_t *buff = malloc(sb->s_blocksize);
+  ext2_read(sb->s_bdev, info->s_block_size > 1024 ? 1 : 2, 1, buff);
+  for(int i = 0; i < info->s_group_count; i++) {
+    info->s_group_desc[i] = malloc(sizeof(struct ext2_blockgroup));
+    info->s_inode_bitmap[i] = malloc(sb->s_blocksize);
+    info->s_block_bitmap[i] = malloc(sb->s_blocksize);
 
-  // printkf("free inodes: %d\n", ext2_bg.bg_free_inodes_count);
-  struct ext2_inode root;
-  ext2_read_ino(gd, 2, &root);
+    memcpy(info->s_group_desc[i], buff + off, sizeof(struct ext2_blockgroup));
+    
+    ext2_read(sb->s_bdev, info->s_group_desc[i]->bg_inode_bitmap, 1, info->s_inode_bitmap[i]);
+    ext2_read(sb->s_bdev, info->s_group_desc[i]->bg_block_bitmap, 1, info->s_block_bitmap[i]);
 
-  // printkf("block: %d\n", S_ISDIR(root.i_mode));
 
-  g_ext2_sb.s_dev       = MKDEV(8, 0);
-  g_ext2_sb.s_magic     = ext2_sb.s_magic;
-  g_ext2_sb.s_blocksize = e2sb.block_siz;
-  g_ext2_sb.s_op        = &ext2_sops;
-  g_ext2_sb.s_disk      = gd;
+    off += sizeof(struct ext2_blockgroup);
+    if(off >= sb->s_blocksize) break;
+  }
+  free(buff);
 
-  rootnode.sb    = &g_ext2_sb;
-  rootnode.dev   = g_ext2_sb.s_dev;
-  rootnode.gid   = 0;
-  rootnode.uid   = 0;
-  rootnode.ino   = 2;
-  rootnode.size  = e2sb.block_siz;
-  rootnode.mode  = S_IFDIR | 0766;
-  rootnode.pdata = gd;
-  rootnode.ops   = &ext2_iops;
-  rootnode.fops  = &ext2_fops;
+  struct inode *root = malloc(sizeof(*root));
+  root->sb = sb;
+  root->ino = 2;
+  root->dev = sb->s_dev;
 
-  set_dev(&g_ext2_sb, &rootnode);
-  memcpy(&p_curproc->p_user->u_cdir, &rootnode, sizeof(struct inode));
-
-  set_special();
+  ext2_inoder(root);
+  
+  sb->s_root = root;
 }

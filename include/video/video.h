@@ -30,4 +30,9 @@ void vscroll_up();
 int  kisprint(int);
 void mkadv();
 
+void _printk(char *a);
+void _putchr(char a);
+
+int _printkf(const char *fmt, ...);
+
 #endif

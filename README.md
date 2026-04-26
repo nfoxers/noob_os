@@ -36,7 +36,7 @@ high memory
 |              |
 |              |
 |              |
-| kernel heap  | ≈ 60KB
+| kernel heap  | ≈ 70KB
 +- - - - - - - + 0x00200000 1 MiB
 |              |
 |              |

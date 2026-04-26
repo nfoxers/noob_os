@@ -1,18 +1,11 @@
+#include "fs/ext2.h"
 #include "fs/vfs.h"
+#include "video/printf.h"
 #include <dev/block_dev.h>
 #include <mem/mem.h>
 #include <mm/mm.h>
 
-#define PG_SIZ 4096
-
-void bio_add_pg(struct bio *bio, struct page *page) {
-  bio->b_vec[bio->b_veccount++] = (struct bio_vect) {
-    .bv_page = page,
-    .bv_len = PG_SIZ,
-    .bv_off = 0
-  };
-}
-
+// maps filesystem blocks to partition relative blocks
 uint32_t bmap(struct inode *in, uint32_t block) {
   if(in->aps && in->aps->bmap) {
     return in->aps->bmap(in, block);
@@ -20,41 +13,42 @@ uint32_t bmap(struct inode *in, uint32_t block) {
   return 0;
 }
 
-void submit_bio(struct bio *bio) {
-  bio->b_sect += bio->b_bdev->bd_start;
-  // enqueue_bio(bio);
+// bread
+ssize_t bread(struct block_dev *bd, sector_t sect, sector_t count, void *buf) {
+  if(!bd || !bd->bd_disk || !bd->bd_disk->bops || !bd->bd_disk->bops->read) {
+    printkf("sdfsfsfs\n");
+    return -1;
+  }
+
+  return bd->bd_disk->bops->read(sect + bd->bd_start, count, buf);
 }
 
-int readpage(struct inode *in, struct page *page) {
-  uint32_t idx = page->idx;
-  uint32_t block = bmap(in, idx);
-  
-  struct bio *bio = malloc(sizeof(*bio));
-  bio->b_bdev = in->sb->s_bdev;
-  bio->b_sect = block;
+ssize_t bwrite(struct block_dev *bd, sector_t sect, sector_t count, const void *buf) {
+  if(!bd || !bd->bd_disk || !bd->bd_disk->bops || !bd->bd_disk->bops->write) {
+    return -1;
+  }
 
-  bio_add_pg(bio, page);
-
-  // todo: add end_io callback
-
-
-  submit_bio(bio);
-
-  return 0;
+  return bd->bd_disk->bops->write(sect + bd->bd_start, count, buf);
 }
 
-int write_page(struct page *page) {
-  uint32_t block = bmap(page->inode, page->idx);
+// parses filesystem types and initializes them with proper modules
+int find_n_init_fs(struct block_dev *bd) {
+  uint8_t *b = malloc(512 * 4);
+  bread(bd, 0, 4, b);
 
-  struct bio *bio = malloc(sizeof(*bio));
-  bio->b_bdev = page->inode->sb->s_bdev;
-  bio->b_sect = block;
+  struct ext2_superblock *sb = (struct ext2_superblock *)(b + 1024);
+  if(sb->s_magic == 0xef53) {
+    // ! init here...
+    
+    struct super_block *es = malloc(sizeof(*es));
+    ext2_init(bd, es);
+    goto done;
+  }
 
-  bio_add_pg(bio, page);
+  free(b);
+  return 1;
 
-  bio->b_opf = BIO_WRITE;
-  // end_io
-
-  submit_bio(bio);
+  done:
+  free(b);
   return 0;
 }

@@ -1,5 +1,6 @@
 #include "dev/block_dev.h"
 #include "fs/devfs.h"
+#include "fs/vfs.h"
 #include "video/printf.h"
 #include <driver/disk/ide.h>
 #include <io.h>
@@ -118,6 +119,8 @@ ssize_t ata_devread(struct device *d, void *buf, size_t count) {
   return count;
 }
 
+extern void set_special();
+
 int ata_init(void) {
   int r = ata_check_drive(ATA_DRIVE_MASTER);
   if (!r) {
@@ -127,31 +130,39 @@ int ata_init(void) {
   ata_ops.read  = ata_read_sectors;
   ata_ops.write = ata_write_sectors;
 
-  ata_part.bd         = NULL;
+  // ! partition support here
+  ata_part.bd         = &ata_bdev;
   ata_part.nr_sect    = 12345;
   ata_part.start_sect = 0;
   ata_parts.part[0]   = &ata_part;
 
   ata_queue.head = NULL;
 
-  atamaster.maj      = 2;
+  atamaster.maj      = 8;
   atamaster.minor    = 0;
   atamaster.bops     = &ata_ops;
   atamaster.part_tbl = &ata_parts;
   atamaster.queue    = &ata_queue;
 
+  // whole disk
   ata_bdev.bd_queue = &ata_queue;
-  ata_bdev.bd_dev   = 2 << 16;
+  ata_bdev.bd_dev   = MKDEV(8, 0);
   ata_bdev.bd_disk  = &atamaster;
   ata_bdev.bd_start = 0;
-  ata_bdev.parent   = NULL;
+  ata_bdev.bd_parent   = NULL;
 
   ata_dev.name     = "sda";
   ata_dev.pdata    = &ata_bdev;
   ata_dev.ops.read = ata_devread;
 
-  ext2_init(&atamaster);
+  //ext2_init(&atamaster);
+  find_n_init_fs(&ata_bdev);
 
+  struct mount *mnt = malloc(sizeof(*mnt));
+
+  mnt->sb = ata_bdev.bd_sb;
+  imount(&rootnode, mnt);
+  set_special();
   creat_devfs("sda", &ata_dev, 8, 0);
 
   return 1;

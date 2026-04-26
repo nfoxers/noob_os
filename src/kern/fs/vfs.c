@@ -1,5 +1,6 @@
 #include "fs/vfs.h"
 #include "ams/bits/struct_stat.h"
+#include "ams/sys/stat.h"
 #include "crypt/crypt.h"
 #include "lib/list.h"
 #include "mem/mem.h"
@@ -13,6 +14,11 @@
 
 struct inode rootnode;
 struct mount rootmnt;
+
+extern struct super_block devblock;
+extern struct inode       devnode;
+extern struct mount       devmnt;
+extern void init_devs();
 
 #define HITAB_MAX 64
 
@@ -203,6 +209,16 @@ void iput(struct inode *in) {
 void imount(struct inode *in, struct mount *mnt) {
   in->iflags |= IN_MOUNT;
   in->mnt = mnt;
+
+  mnt->mountpt = in;
+
+}
+
+void set_special() {
+  init_devs();
+
+  struct inode *dev_fs = lookup_vfs("/dev");
+  imount(dev_fs, &devmnt);
 }
 
 void purge_lru() {
@@ -321,26 +337,30 @@ struct inode *lookup_vfs_i(char *pth) {
       mdepth++;
   }
 
-  struct inode *inode = iget(rootnode.sb, rootnode.ino);
+  if(rootnode.mnt == 0) {
+    _printk("fatal error: / is not mounted\n");
+    while(1) asm volatile("hlt");
+  }
+
+  struct inode *mroot = rootnode.mnt->sb->s_root;
+  struct inode *inode = iget(mroot->sb, mroot->ino);
   char         *sv;
 
   char *tok = strtok_r(pth, "/", &sv);
 
   if (!tok) { // effective path = / (root)
-    // free(pth);
-    iput(inode);
-    return iget(rootnode.sb, rootnode.ino);
+    return inode;
   }
 
   ino_t         ino;
   struct inode *tmp = inode;
   while (tok) {
-    // printkf("searching for: %s\n", tok);
+    //printkf("searching for: %s in inode %d\n", tok, inode->ino);
     //  printkf("in inode %x\n", inode->mode & S_IFREG);
     ino = lookup_fs(inode, tok);
-    // printkf("ino (lookup): %d\n", ino);
+    //printkf("ino (lookup): %d\n", ino);
     if ((int)ino == -1) {
-      printkf("lookup_vfs: file not found\n");
+      printk("lookup_vfs: file not found\n");
       // free(pth);
       return NULL;
     }
@@ -737,6 +757,7 @@ int fsys_fstat(int fd, struct stat *statbuf) {
   statbuf->st_uid = in->uid;
   statbuf->st_gid = in->gid;
   statbuf->st_dev = in->sb->s_dev;
+  statbuf->st_rdev = in->rdev;
   statbuf->st_blksize = in->blksiz;
   statbuf->st_blocks = in->blkcount;
   // ! expand!!
@@ -893,12 +914,21 @@ int flstat(const char *name) {
   struct stat stat;
   fstat(fd, &stat);
 
+  char *perm = permget(stat.st_mode, stat.st_mode & 0777);
+
   printkf("  file: %s\n", name);
   printkf("  size: %u     blocks: %d\n", stat.st_size, stat.st_blocks);
   printkf("device: %d,%d", MAJOR(stat.st_dev), MINOR(stat.st_dev));
-  printkf("  inode: %d\n", stat.st_ino);
-  printkf("access: (%03x)  uid: %d gid: %d\n", stat.st_mode & 0777, stat.st_uid, stat.st_gid);
+  printkf("  inode: %d", stat.st_ino);
 
+  if(S_ISCHR(stat.st_mode) || S_ISBLK(stat.st_mode)) {
+    printkf("  device type: %d,%d", MAJOR(stat.st_rdev), MINOR(stat.st_rdev));
+  }
+  printkf("\n");
+
+  printkf("access: (0%03.3o/%s)  uid: %d gid: %d\n", stat.st_mode & 0777, perm, stat.st_uid, stat.st_gid);
+
+  free(perm);
   close(fd);
   return 0;
 }

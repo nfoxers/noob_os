@@ -118,6 +118,15 @@ void printk(char *a) {
   }
 }
 
+void _printk(char *a) {
+  int off = 0;
+  while(*a) {
+    VGA[2 * off++] = *a;
+    VGA[2 * off + 1] = 0x0f;
+    a++;
+  }
+}
+
 void clr_scr3() {
   bottom = 0;
   cursor = 0;

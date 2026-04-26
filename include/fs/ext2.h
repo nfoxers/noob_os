@@ -105,7 +105,7 @@ struct ext2_inode {
 #define EXT2_FT_SOCK   6
 #define EXT2_FT_SYM    7
 
-struct ext_direntry {
+struct ext2_direntry {
   uint32_t d_ino;
   uint16_t d_rec_len;
   uint8_t  d_name_len;
@@ -113,6 +113,33 @@ struct ext_direntry {
   char     name[];
 } __attribute__((packed));
 
-void ext2_init(struct gendisk *gd);
+/* function */
+
+void ext2_init(struct block_dev *bd, struct super_block *sb);
+
+/* vfs use */
+
+#define EXT2_MAX_GROUP_LOADED 8
+
+struct ext2_sb_info {
+  uint32_t s_block_size;
+  uint32_t s_inode_size;
+  uint32_t s_inodes_per_group;
+  uint32_t s_blocks_per_group;
+
+  struct ext2_blockgroup *s_group_desc[EXT2_MAX_GROUP_LOADED];
+  
+  uint16_t s_group_count;
+  uint16_t s_loaded_inode_bitmaps;
+  uint16_t s_loaded_block_bitmaps;
+
+  uint8_t *s_inode_bitmap[EXT2_MAX_GROUP_LOADED];
+  uint8_t *s_block_bitmap[EXT2_MAX_GROUP_LOADED];
+};
+
+struct ext2_inode_info {
+  uint32_t i_block[15];
+  uint32_t i_blocks;
+};
 
 #endif

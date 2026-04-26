@@ -46,14 +46,15 @@ bin/os.img: build/kern.elf build/user.elf $(DEP_EXTRA)
 	$(XZ) -9f build/kernel
 
 	cp ./grub/initdisk.img $@
-	e2cp ./grub/grub.cfg $@:/boot/grub
-	e2cp build/kernel.xz $@:/boot
 
-	e2cp data/etc/* $@:/etc
+	e2cp -O 0 -G 0 -P 700 ./grub/grub.cfg $@:/boot/grub
+	e2cp -O 0 -G 0 -P 700 build/kernel.xz $@:/boot
 
-	e2mkdir $@:/dev
-	e2mkdir -P 666 $@:/root
-	e2mkdir $@:/home/user
+	e2cp -O 1000 -G 1000 -P 755  data/etc/* $@:/etc
+
+	e2mkdir -O 0 -G 0 $@:/dev
+	e2mkdir -O 0 -G 0 -P 700 $@:/root
+	e2mkdir -O 1000 -G 1000 -P 750 $@:/home/user
 
 build/user.elf: $(OBJu) build/libc.a
 	$(LD) $(LDFLAGSu) $^ -o $@

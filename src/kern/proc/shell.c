@@ -229,18 +229,25 @@ int printfile(const char *file) {
   struct stat buf;
   fstat(fd, &buf);
 
-  int c = 0;
 
   int r = 0;
-  uint8_t *b = !S_ISCHR(buf.st_mode) ? malloc(buf.st_size) : &c;  
-  int count = !S_ISCHR(buf.st_mode) ? buf.st_size : 1;
+  int count = 4096;
+  uint8_t *b = malloc(count);  
 
-  while((r = read(fd, b, count)) == count) {
-    if(write(stdout, b, r) == -1) perror("write");
+  while((r = read(fd, b, count)) > 0) {
+    if(write(stdout, b, r) == -1) {
+      perror("cat: write");
+      close(fd);
+      return 1;
+    }
   }
-  !S_ISCHR(buf.st_mode) ? free(b) : 0;
+  
 
   close(fd);
+
+  if(r == -1) {
+    perror("cat: read");
+  }
   return 0;
 }
 

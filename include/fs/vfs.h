@@ -1,7 +1,7 @@
 #ifndef VFS_H
 #define VFS_H
 
-#include "ams/sys/types.h"
+#include <ams/sys/types.h>
 #include "cpu/spinlock.h"
 #include "lib/list.h"
 #include "stddef.h"
@@ -9,7 +9,6 @@
 
 #include "ams/sys/stat.h"
 #include "dev/block_dev.h"
-#include <sys/types.h>
 
 #define F_USED 0x1000
 #define F_ADDR 0x0008
@@ -242,5 +241,7 @@ int lsdir(const char *path, int flg);
 int nlsdir(const char *path, int flg);
 int flstat(const char *name);
 int findfreefd();
+
+extern struct inode rootnode;
 
 #endif

@@ -85,8 +85,14 @@ struct block_dev {
 
   struct gendisk   *bd_disk;
   struct req_queue *bd_queue;
-  struct block_dev *parent;
+  struct block_dev *bd_parent;
   sector_t          bd_start;
 };
+
+ssize_t bread(struct block_dev *bd, sector_t sect, sector_t count, void *buf);
+ssize_t bwrite(struct block_dev *bd, sector_t sect, sector_t count, const void *buf);
+uint32_t bmap(struct inode *in, uint32_t block);
+
+int find_n_init_fs(struct block_dev *bd);
 
 #endif

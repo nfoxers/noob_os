@@ -1,3 +1,4 @@
+#include "ams/sys/stat.h"
 #include "cpu/ccpu.h"
 #include "cpu/gdt.h"
 #include "cpu/idt.h"
@@ -59,14 +60,13 @@ void setup(void *ptr) {
   pci_init();
   init_serial(9600);
   fpu_init();
-
   page_init();
 
   init_kbd();
   vgatext_init();
-
+  
   mkadv();
-  dealloc_legacy_video();
+  //dealloc_legacy_video();
 
   check_capat();
   printk("time of boot: ");
