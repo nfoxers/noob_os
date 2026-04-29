@@ -31,3 +31,7 @@ void get_rand(uint8_t *out, size_t outlen) {
 
   blake2s(ent_pool, 32, out, 0, pool2, 32);
 }
+
+void get_entpool(uint8_t out[static 32]) {
+  memcpy(out, ent_pool, 32);
+}

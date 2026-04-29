@@ -74,21 +74,6 @@ uint32_t sys_yield(ARGS) {
   return 0;
 }
 
-uint32_t sys_opendir(ARGS) {
-  ARGS_USELESS;
-  return (uint32_t)fsys_opendir((char*)a1);
-}
-
-uint32_t sys_closedir(ARGS) {
-  ARGS_USELESS;
-  return fsys_closedir((struct inode *)a1, (DIR *)a2);
-}
-
-uint32_t sys_pipe(ARGS) {
-  ARGS_USELESS;
-  return fsys_pipe((int *)a1);
-}
-
 uint32_t sys_ioctl(ARGS) {
   ARGS_USELESS;
   return fsys_ioctl(a1, a2, (void *)a3);
@@ -118,7 +103,7 @@ uint32_t sys_getdents(ARGS) {
 
 const syshand systab[NSYS] = {
     0, 0, 0, sys_read, sys_write, sys_open, sys_close, 0, sys_yield, sys_chdir, sys_mkdir,
-  sys_unlink, sys_opendir, sys_closedir, sys_pipe, sys_ioctl, sys_dup, sys_dup2, sys_fstat, sys_getdents};
+  sys_unlink, 0, 0, 0, sys_ioctl, sys_dup, sys_dup2, sys_fstat, sys_getdents};
  
 void sys_hand(struct regs *r) {
   syshand e = systab[r->eax];

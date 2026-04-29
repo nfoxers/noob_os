@@ -30,6 +30,8 @@ extern void parse_multiboot2(void *ptr);
 
 extern void vgatext_init();
 extern void dealloc_legacy_video();
+extern void init_devs();
+extern void register_fses();
 
 void setup(void *ptr) {
   //zero_bss();
@@ -54,6 +56,8 @@ void setup(void *ptr) {
   (void)ptr;
   //parse_multiboot2(ptr); 
 
+  register_fses();
+  init_devs();
   ata_init();
 
   init_pit(1);
@@ -66,7 +70,7 @@ void setup(void *ptr) {
   vgatext_init();
   
   mkadv();
-  //dealloc_legacy_video();
+  dealloc_legacy_video();
 
   check_capat();
   printk("time of boot: ");

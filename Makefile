@@ -16,7 +16,7 @@ CFLAGSu = $(CFLAGS) -nostartfiles -nodefaultlibs
 LDFLAGS = -m elf_i386 -T src/link.ld
 LDFLAGSu = -m elf_i386 -T user/link.ld
 
-QMFLAGS = 
+QMFLAGS = -device ahci
 
 SRC = $(shell find ./src/kern -name '*.c' -o -name '*.asm')
 OBJ = $(patsubst ./src/kern/%.c,./build/kern/%.o, $(SRC))

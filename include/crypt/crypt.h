@@ -14,5 +14,6 @@ int chkcred(const char *usr, const char *cred, struct userinfo *info);
 
 void insert_ent(uint32_t ent);
 void get_rand(uint8_t *out, size_t outlen);
+void get_entpool(uint8_t out[static 32]);
 
 #endif

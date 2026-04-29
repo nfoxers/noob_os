@@ -55,9 +55,4 @@ int ioctl(int fd, int op, void *argp);
 int fstat(int fd, struct stat *statbuf);
 int getdents(int fd, struct nnux_dirent *dirp, size_t count);
 
-// doesnt even exist in linux syscall table
-
-DIR *opendir(const char *path);
-int  closedir(struct inode *in, DIR *d);
-
 #endif

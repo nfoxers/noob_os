@@ -78,6 +78,9 @@ void vt_dispatch(struct vt *vt, char c) {
     case '~':
     vt_scroll(vt, vt->params[0]);
     break;
+    case 'H':
+    term_set_cursor(vt->t, 0, 0);
+    break;
   }
 }
 

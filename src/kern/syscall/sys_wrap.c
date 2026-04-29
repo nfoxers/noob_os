@@ -56,17 +56,6 @@ int unlink(const char *path) { // 10
   return syscall(SYS_UNLINK, path);
 }
 
-DIR *opendir(const char *path) {
-  DIR *ret = (DIR *)syscall(SYS_OPENDIR, path);
-  if ((int)ret == -1)
-    return NULL;
-  return ret;
-}
-
-int closedir(struct inode *in, DIR *d) {
-  return syscall(SYS_CLOSEDIR, in, d);
-}
-
 int pipe(int fd[2]) { // 42
   return syscall(SYS_PIPE, fd);
 }

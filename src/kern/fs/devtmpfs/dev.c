@@ -1,4 +1,6 @@
 #include "fs/devfs.h"
+#include "ams/sys/stat.h"
+#include "dev/block_dev.h"
 #include "fs/fat12.h"
 #include "fs/vfs.h"
 #include "lib/errno.h"
@@ -25,6 +27,8 @@ struct super_block devblock;
 struct inode devnode;
 struct mount devmnt;
 
+struct device dev_blk_dev = {.next = NULL};
+
 int next_dev = 0;
 
 void dir_add(struct dir_data *dir, const char *name, struct inode *in) {
@@ -37,7 +41,7 @@ void dir_add(struct dir_data *dir, const char *name, struct inode *in) {
   strcpy(dent->name, name);
 }
 
-fsino_t lookup_dev(struct inode *dir, const char *name) {
+ino_t lookup_dev(struct inode *dir, const char *name) {
   struct dir_data *data = dir->pdata;
   if (!data)
     return -1;
@@ -75,7 +79,68 @@ struct inode *creat_devfs(const char *name, struct device *dev, uint16_t maj, ui
   return in;
 }
 
+struct inode *creat_blockdev(const char *name, struct device *dev, uint16_t maj, uint16_t min) {
+  struct device *d = &dev_blk_dev;
+  while(d->next) d = d->next;
+  d->next = dev;
+  
+  struct inode *in = malloc(sizeof(*in));
+
+  in->mode = S_IFBLK | 0666;
+  in->ino = next_dev++;
+  in->sb = &devblock;
+  in->fops = &dev_fops;
+  in->refs = 1;
+
+  in->rdev = MKDEV(maj, min);
+  dev->devt = in->rdev;
+  dir_add(&devfs_root, name, in);
+  return in;
+}
+
+struct device *device_get_devblk(dev_t dev) {
+  struct device *d = &dev_blk_dev;
+  while(d->next) {
+    d = d->next;
+    if(d->devt == dev) {
+      return d;
+    }
+  }
+
+  return 0;
+}
+
+struct block_dev *blkdev_get_dev(dev_t dev) {
+  struct device *d = &dev_blk_dev;
+  while(d->next) {
+    d = d->next;
+    if(d->devt == dev) {
+      return d->pdata;
+    }
+    
+  }
+
+  return NULL;
+}
+
+struct block_dev *blkdev_get_path(const char *path) {
+  struct inode *in = lookup_vfs(path);
+  if(!S_ISBLK(in->mode)) {
+    return NULL;
+  }
+
+  struct block_dev *bd = blkdev_get_dev(in->rdev);
+  iput(in);
+
+  return bd;
+}
+
 struct device *getdev(struct inode *in) {
+
+  if(S_ISBLK(in->mode)) {
+    return device_get_devblk(in->rdev);
+  }
+
   uint16_t maj = MAJOR(in->rdev);
   uint16_t min = MINOR(in->rdev);
   return chrdev_tab[maj][min];
@@ -113,29 +178,6 @@ int close_devfs(struct file *f) {
   return 0;
 }
 
-DIR *opendir_devfs(struct inode *dir) {
-  (void)dir;
-
-  struct dir_data *data = dir->pdata;
-
-  DIR *d = malloc(sizeof(DIR) * NODEVFS);
-  for (int i = 0; i < data->count && i < NODEVFS; i++) {
-    strcpy(d[i].data, data->entry[i].name);
-    d[i].in    = data->entry[i].in;
-    d[i].type  = data->entry[i].in->mode;
-    d[i].count = data->count;
-    d[i].size  = data->entry[i].in->size;
-  }
-
-  return d;
-}
-
-int closedir_devfs(struct inode *dir, DIR *d) {
-  free(d);
-  (void)dir;
-  return 0;
-}
-
 int ioctl_devfs(struct file *file, int op, void *arg) {
   struct device *d = getdev(file->inode);
   if (d && d->ops.ioctl) {
@@ -160,8 +202,7 @@ void dev_inoder(struct inode *in) {
 
 struct inode_ops dev_iops = {
     .lookup   = lookup_dev,
-    .opendir  = opendir_devfs,
-    .closedir = closedir_devfs};
+};
 
 struct file_ops dev_fops = {
     .open  = open_devfs,

@@ -2,6 +2,7 @@
 #include "cpu/gdt.h"
 #include "cpu/idt.h"
 #include "cpu/irq.h"
+#include "crypt/crypt.h"
 #include "driver/keyboard.h"
 #include "driver/pci.h"
 #include "driver/time.h"
@@ -116,28 +117,6 @@ int c_exit(char **argv, int argc) {
   return 0; // this line is useless
 }
 
-int c_ls(char **argv, int argc) {
-  if (argc == 1) {
-    return lsdir(".", 0);
-  }
-
-  char *pth = argv[1];
-  if (*pth == '-') {
-    if (*(pth + 1) == 'l') {
-      if (argc == 2) {
-        return lsdir(".", 3);
-      } else {
-        pth = argv[2];
-        return lsdir(pth, 3);
-      }
-
-    } else
-      return 2;
-  }
-
-  return lsdir(pth, 0);
-}
-
 int c_rm(char **argv, int argc) {
   if (argc == 1) {
     printk("specify thy path\n");
@@ -229,25 +208,26 @@ int printfile(const char *file) {
   struct stat buf;
   fstat(fd, &buf);
 
+  int      r     = 0;
+  int      count = buf.st_blksize;
+  uint8_t *b     = malloc(count);
 
-  int r = 0;
-  int count = 4096;
-  uint8_t *b = malloc(count);  
-
-  while((r = read(fd, b, count)) > 0) {
-    if(write(stdout, b, r) == -1) {
+  while ((r = read(fd, b, count)) > 0) {
+    if (write(stdout, b, r) == -1) {
       perror("cat: write");
       close(fd);
+      free(b);
       return 1;
     }
   }
-  
 
   close(fd);
+  free(b);
 
-  if(r == -1) {
+  if (r == -1) {
     perror("cat: read");
   }
+
   return 0;
 }
 
@@ -311,19 +291,36 @@ int c_lsirq(char **argv, int argc) {
 
 int c_nls(char **argv, int argc) {
   ARGS_USELESS;
-  if(argc == 1)
+  if (argc == 1)
     return nlsdir(".", 1);
   return nlsdir(argv[1], 1);
 }
 
 int c_stat(char **argv, int argc) {
-  if(argc == 1) return 0;
+  if (argc == 1)
+    return 0;
   return flstat(argv[1]);
 }
 
+int c_ent(char **argv, int argc) {
+  ARGS_USELESS;
+  uint8_t buf[32];
+
+  while (1) {
+    get_entpool(buf);
+    for (int i = 0; i < 32 / 4; i++) {
+      printkf("%04x   \n", i[(uint32_t *)buf]);
+    }
+    printkf("\e[H");
+  }
+  printkf("\n");
+  return 0;
+}
+
 static char const *const cmds[] = {
-    "help", "exit", "ls", "rm", "touch", "clear", "time", "bf", "lspci", "mkdir", "cd",
-    "cat", "mall", "h", "mused", "icach", "ipurge", "lsirq", "lsn", "stat"};
+    "help", "exit", "rm", "touch", "clear", "time", "bf", "lspci", "mkdir", "cd",
+    "cat", "mall", "h", "mused", "icach", "ipurge", "lsirq", "ls", "stat",
+    "ent"};
 
 int c_help(char **argv, int argc) {
   ARGS_USELESS;
@@ -338,8 +335,9 @@ int c_help(char **argv, int argc) {
 }
 
 static int (*const ftab[])(char *argv[NARGS], int argc) = {
-    c_help, c_exit, c_ls, c_rm, c_touch, c_clear, c_time, c_bf, c_lspci, c_mkdir, c_cd,
-    c_cat, c_mall, c_h, c_mused, c_icach, c_ipurge, c_lsirq, c_nls, c_stat};
+    c_help, c_exit, c_rm, c_touch, c_clear, c_time, c_bf, c_lspci, c_mkdir, c_cd,
+    c_cat, c_mall, c_h, c_mused, c_icach, c_ipurge, c_lsirq, c_nls, c_stat,
+    c_ent};
 
 void shell() {
   printkf("\e[37m");

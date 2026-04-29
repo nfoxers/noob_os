@@ -9,8 +9,6 @@
 #include <mem/mem.h>
 #include <proc/proc.h>
 
-#define DIV_ROUND_UP(n, d) (((n) + (d) - 1) / (d))
-
 // ! todo: partition support
 /* vfs interface */
 
@@ -224,13 +222,6 @@ void ext2_putin(struct inode *in) {
   free(in->pdata);
 }
 
-void ext2_putsb(struct super_block *sb) {
-  struct ext2_sb_info *inf = sb->generic_sbp;
-  // ! todo: free all inf objects
-
-  free(inf);
-}
-
 struct inode_ops ext2_iops = {
     .lookup = ext2_lookup};
 
@@ -241,63 +232,3 @@ struct file_ops ext2_fops = {
 struct super_ops ext2_sops = {
     .read_inode = ext2_inoder,
   .put_inode = ext2_putin};
-
-void ext2_init(struct block_dev *bd, struct super_block *sb) {
-  uint8_t *buf = malloc(1024);
-  struct ext2_superblock e2sb;
-
-  bread(bd, 2, 2, buf);
-  memcpy(&e2sb, buf, sizeof(e2sb));
-  free(buf);
-
-  if (e2sb.s_magic != EXT2_SUPER_MAGIC) {
-    printkf("not an ext2 fs\n");
-    return;
-  }
-
-
-  struct ext2_sb_info *info = malloc(sizeof(*info));
-  uint32_t off = 0;
-  
-  bd->bd_sb = sb;
-  sb->s_blocksize = 1024 << e2sb.s_log_block_siz;
-  sb->s_bdev = bd;
-  sb->s_dev = bd->bd_dev;
-  sb->s_disk = bd->bd_disk;
-  sb->s_magic = EXT2_SUPER_MAGIC;
-  sb->s_op = &ext2_sops;
-  sb->s_inext = 3;
-  sb->generic_sbp = info;
-  info->s_block_size = sb->s_blocksize;
-  info->s_blocks_per_group = e2sb.s_blocks_per_group;
-  info->s_group_count = DIV_ROUND_UP(e2sb.s_blocks_count, e2sb.s_blocks_per_group);
-  info->s_inode_size = e2sb.s_inode_siz;
-  info->s_inodes_per_group = e2sb.s_inodes_per_group;
-  
-  uint8_t *buff = malloc(sb->s_blocksize);
-  ext2_read(sb->s_bdev, info->s_block_size > 1024 ? 1 : 2, 1, buff);
-  for(int i = 0; i < info->s_group_count; i++) {
-    info->s_group_desc[i] = malloc(sizeof(struct ext2_blockgroup));
-    info->s_inode_bitmap[i] = malloc(sb->s_blocksize);
-    info->s_block_bitmap[i] = malloc(sb->s_blocksize);
-
-    memcpy(info->s_group_desc[i], buff + off, sizeof(struct ext2_blockgroup));
-    
-    ext2_read(sb->s_bdev, info->s_group_desc[i]->bg_inode_bitmap, 1, info->s_inode_bitmap[i]);
-    ext2_read(sb->s_bdev, info->s_group_desc[i]->bg_block_bitmap, 1, info->s_block_bitmap[i]);
-
-
-    off += sizeof(struct ext2_blockgroup);
-    if(off >= sb->s_blocksize) break;
-  }
-  free(buff);
-
-  struct inode *root = malloc(sizeof(*root));
-  root->sb = sb;
-  root->ino = 2;
-  root->dev = sb->s_dev;
-
-  ext2_inoder(root);
-  
-  sb->s_root = root;
-}

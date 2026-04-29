@@ -1,6 +1,7 @@
 #include "driver/keyboard.h"
 #include "ams/ioctls.h"
 #include "ams/termbits.h"
+#include "crypt/crypt.h"
 #include "driver/serial.h"
 #include "cpu/idt.h"
 #include "driver/tty.h"
@@ -148,6 +149,7 @@ uint8_t parse_char(uint8_t scan) {
 
 static void kbd_handler(struct regs *r) {
   (void)r;
+  insert_ent(r->eip);
   uint8_t scan = inb(0x60);
   // printkf("%02x ", scan);
   uint8_t ch = parse_char(scan);

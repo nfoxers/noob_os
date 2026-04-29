@@ -7,7 +7,7 @@
 #include <mem/mem.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <fs/ext2.h>
+#include <fs/fs.h>
 
 // todo: actual ide/ahci support
 
@@ -17,6 +17,65 @@ struct bd_ops    ata_ops;
 struct req_queue ata_queue;
 struct dpart_tbl ata_parts;
 struct hd_struct ata_part;
+
+struct device ata_dev;
+
+extern void set_special();
+static int ata_check_drive(int drive);
+ssize_t ata_devread(struct device *d, void *buf, size_t count);
+
+int ata_init(void) {
+  int r = ata_check_drive(ATA_DRIVE_MASTER);
+  if (!r) {
+    printkf("no drives found");
+  }
+
+  ata_ops.read  = ata_read_sectors;
+  ata_ops.write = ata_write_sectors;
+
+  // ! partition support here
+  ata_part.bd         = &ata_bdev;
+  ata_part.nr_sect    = 12345;
+  ata_part.start_sect = 0;
+  ata_parts.part[0]   = &ata_part;
+
+  ata_queue.head = NULL;
+
+  atamaster.maj      = 8;
+  atamaster.minor    = 0;
+  atamaster.bops     = &ata_ops;
+  atamaster.part_tbl = &ata_parts;
+  atamaster.queue    = &ata_queue;
+
+  // whole disk
+  ata_bdev.bd_queue = &ata_queue;
+  ata_bdev.bd_dev   = MKDEV(8, 0);
+  ata_bdev.bd_disk  = &atamaster;
+  ata_bdev.bd_start = 0;
+  ata_bdev.bd_parent   = NULL;
+
+  ata_dev.name     = "sda";
+  ata_dev.pdata    = &ata_bdev;
+  ata_dev.ops.read = ata_devread;
+
+  creat_blockdev("sda", &ata_dev, 8, 0);
+
+  struct mount *mnt = malloc(sizeof(*mnt));
+
+  mnt->sb = ata_bdev.bd_sb;
+  imount(&rootnode, mnt);
+
+  mount_root(ata_bdev.bd_dev, "ext2");
+
+  set_special();
+  
+
+  return 1;
+}
+
+ /* low level interface */
+
+ // todo: slave device support
 
 static void ata_delay(void) {
   inb(ATA_PRIMARY_CTRL);
@@ -87,87 +146,6 @@ static int ata_check_drive(int drive) {
   return 1;
 }
 
-ssize_t dsk_read(struct block_dev *bd, sector_t sect, size_t len, void *buf) {
-  if(bd && bd->bd_disk && bd->bd_disk->bops && bd->bd_disk->bops->read) {
-    return bd->bd_disk->bops->read(sect, len, buf);
-  }
-  return -1;
-}
-
-struct device ata_dev;
-
-ssize_t ata_devread(struct device *d, void *buf, size_t count) {
-  struct block_dev *bd = d->pdata;
-
-  size_t   off  = d->off;
-  sector_t sect = bd->bd_start + off / 512;
-  off %= 512;
-  size_t   i;
-  uint8_t *buff = malloc(512);
-
-  for (i = 0; i < count / 512; i++) {
-    dsk_read(bd, sect, 1, buff);
-    memcpy(buf + i*512, buff + off, 512 - off);
-    off = 0;
-  }
-
-  dsk_read(bd, sect + i, 1, buff);
-  memcpy(buf + i*512, buff + off, count % 512);
-
-  d->off += count;
-  free(buff);
-  return count;
-}
-
-extern void set_special();
-
-int ata_init(void) {
-  int r = ata_check_drive(ATA_DRIVE_MASTER);
-  if (!r) {
-    printkf("no drives found");
-  }
-
-  ata_ops.read  = ata_read_sectors;
-  ata_ops.write = ata_write_sectors;
-
-  // ! partition support here
-  ata_part.bd         = &ata_bdev;
-  ata_part.nr_sect    = 12345;
-  ata_part.start_sect = 0;
-  ata_parts.part[0]   = &ata_part;
-
-  ata_queue.head = NULL;
-
-  atamaster.maj      = 8;
-  atamaster.minor    = 0;
-  atamaster.bops     = &ata_ops;
-  atamaster.part_tbl = &ata_parts;
-  atamaster.queue    = &ata_queue;
-
-  // whole disk
-  ata_bdev.bd_queue = &ata_queue;
-  ata_bdev.bd_dev   = MKDEV(8, 0);
-  ata_bdev.bd_disk  = &atamaster;
-  ata_bdev.bd_start = 0;
-  ata_bdev.bd_parent   = NULL;
-
-  ata_dev.name     = "sda";
-  ata_dev.pdata    = &ata_bdev;
-  ata_dev.ops.read = ata_devread;
-
-  //ext2_init(&atamaster);
-  find_n_init_fs(&ata_bdev);
-
-  struct mount *mnt = malloc(sizeof(*mnt));
-
-  mnt->sb = ata_bdev.bd_sb;
-  imount(&rootnode, mnt);
-  set_special();
-  creat_devfs("sda", &ata_dev, 8, 0);
-
-  return 1;
-}
-
 int ata_read_sectors(uint32_t lba, size_t sec_count, uint8_t buf[static 512]) {
   if (ata_poll_bsy() != 0)
     return -1;
@@ -223,4 +201,36 @@ int ata_write_sectors(uint32_t lba, size_t count, const uint8_t buf[static 512])
       return -1;
   }
   return 0;
+}
+
+/* block device interface (/dev/sd*) */
+
+ssize_t dsk_read(struct block_dev *bd, sector_t sect, size_t len, void *buf) {
+  if(bd && bd->bd_disk && bd->bd_disk->bops && bd->bd_disk->bops->read) {
+    return bd->bd_disk->bops->read(sect, len, buf);
+  }
+  return -1;
+}
+
+ssize_t ata_devread(struct device *d, void *buf, size_t count) {
+  struct block_dev *bd = d->pdata;
+
+  size_t   off  = d->off;
+  sector_t sect = bd->bd_start + off / 512;
+  off %= 512;
+  size_t   i;
+  uint8_t *buff = malloc(512);
+
+  for (i = 0; i < count / 512; i++) {
+    dsk_read(bd, sect, 1, buff);
+    memcpy(buf + i*512, buff + off, 512 - off);
+    off = 0;
+  }
+
+  dsk_read(bd, sect + i, 1, buff);
+  memcpy(buf + i*512, buff + off, count % 512);
+
+  d->off += count;
+  free(buff);
+  return count;
 }

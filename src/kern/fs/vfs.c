@@ -20,11 +20,6 @@ extern struct inode       devnode;
 extern struct mount       devmnt;
 extern void init_devs();
 
-#define HITAB_MAX 64
-
-struct hlist_head hitab[HITAB_MAX];
-struct inode      ilru = {.dev = 99, .sb = 0, .lru.next = &ilru.lru, .lru.prev = &ilru.lru};
-
 #define MAX_PLEN 127
 
 char *path_canon(const char *cwd, const char *path) {
@@ -98,171 +93,9 @@ void set_dev(struct super_block *b, struct inode *root) {
   root->sb  = b;
 }
 
-uint32_t ihash(dev_t dev, ino_t ino) {
-  uint32_t k = murmur3((uint8_t[]){dev, ino}, 2, dev + ino);
-  return k % HITAB_MAX;
-}
-
-struct inode *inode_alloc(struct super_block *sb) {
-  struct inode *in = malloc(sizeof(struct inode));
-  in->dev          = sb->s_dev;
-  return in;
-}
-
-void iadd(struct inode *in) {
-  uint32_t h = ihash(in->sb->s_dev, in->ino);
-  hlist_add_head(&in->hnode, &hitab[h]);
-}
-
-struct inode *iget(struct super_block *sb, fsino_t fsino) {
-  if (!sb)
-    return NULL;
-  uint32_t h = ihash(sb->s_dev, fsino);
-  // printkf("ino: %d ", fsino);
-  //  printkf("dev: %d ", sb->s_dev);
-  struct hlist_node *k = hitab[h].first;
-  // printkf("hash: %d\n", h);
-
-  while (k) {
-    struct inode *in = container_of(k, struct inode, hnode);
-    // printkf("cache bucket ");
-    if ((in->sb->s_dev == sb->s_dev) && (in->ino == fsino)) {
-      // printkf("cache hit\n");
-      in->refs++;
-      return in;
-    }
-    k = k->next;
-  }
-
-  // ok, maybe the inode isnt inside the hlist table, try the lru
-  // printkf("cache miss (hash)\n");
-  struct list_head *m = &ilru.lru;
-  do {
-    // printkf("lru cache ");
-    struct inode *in = container_of(m, struct inode, lru);
-    if (in->sb == 0) {
-      m = m->next;
-      continue;
-    }
-    if ((in->sb->s_dev == sb->s_dev) && (in->ino == fsino)) {
-      // printkf("cache hit (lru)\n");
-      if (in->refs == 0)
-        list_del(&in->lru);
-      in->refs++;
-      hlist_add_head(&in->hnode, &hitab[h]);
-      return in;
-    }
-    m = m->next;
-  } while (m != &ilru.lru);
-
-  // printkf("cache miss (all)\n");
-  struct inode *in = malloc(sizeof(struct inode));
-  in->ino          = fsino;
-  in->dev          = sb->s_dev;
-  in->sb           = sb;
-  in->refs         = 1;
-  init_list(&in->lru);
-
-  if (sb->s_op && sb->s_op->read_inode)
-    sb->s_op->read_inode(in);
-
-  // printkf("mode: %x\n", in->mode);
-
-  in->ino  = fsino;
-  in->dev  = sb->s_dev;
-  in->sb   = sb;
-  in->refs = 1;
-
-  hlist_add_head(&in->hnode, &hitab[h]);
-  return in;
-}
-
-void free_inode(struct inode *in) {
-  if (in->sb && in->sb->s_op && in->sb->s_op->put_inode)
-    in->sb->s_op->put_inode(in);
-  list_del(&in->lru);
-  free(in);
-}
-
-void iput(struct inode *in) {
-  if (in->refs == 0) {
-    printkf("err: inode has 0 refs at iput\n");
-    return;
-  }
-
-  in->refs--;
-
-  if (in->refs > 0)
-    return;
-
-  if (in->iflags & IN_DIRTY) {
-    if (in->sb->s_op->write_inode)
-      in->sb->s_op->write_inode(0, in);
-  }
-
-  // printkf("added inode %x into lru\n", in);
-  list_add(&in->lru, &ilru.lru);
-  hlist_del(&in->hnode);
-  // no free_inodes
-}
-
-void imount(struct inode *in, struct mount *mnt) {
-  in->iflags |= IN_MOUNT;
-  in->mnt = mnt;
-
-  mnt->mountpt = in;
-
-}
-
 void set_special() {
-  init_devs();
-
   struct inode *dev_fs = lookup_vfs("/dev");
   imount(dev_fs, &devmnt);
-}
-
-void purge_lru() {
-  struct list_head *m = &ilru.lru;
-  while (m->next != m) {
-    struct list_head *k  = m->next;
-    struct inode     *in = container_of(k, struct inode, lru);
-    free_inode(in);
-  }
-}
-
-void print_caches() {
-  int tmp = 0;
-  printkf("HASH CACHE:\n");
-  for (int h = 0; h < HITAB_MAX; h++) {
-    tmp                  = 0;
-    struct hlist_node *k = hitab[h].first;
-    if (k) {
-      printkf("[%02x]: ", h);
-      tmp = 1;
-    }
-    while (k) {
-      struct inode *in = container_of(k, struct inode, hnode);
-      printkf("%d@%d.", in->ino, in->sb->s_dev);
-      printkf("%d ", in->refs);
-      k = k->next;
-    }
-    if (tmp)
-      printkf("\n");
-  }
-  printkf("\nLRU CACHE:\n");
-  struct list_head *m = &ilru.lru;
-  do {
-    struct inode *in = container_of(m, struct inode, lru);
-    printkf("[%p]: %d@%d.%d\n", in, in->ino, in->dev, in->refs);
-    m = m->next;
-  } while (m != &ilru.lru);
-
-  printkf("\nFILE DESCS\n");
-  for (size_t i = 0; i < sizeof(p_curproc->p_user->u_ofile) / sizeof(p_curproc->p_user->u_ofile[0]); i++) {
-    if (p_curproc->p_user->u_ofile[i]) {
-      printkf("[%02d]: %p.%d\n", i, p_curproc->p_user->u_ofile[i]->inode, p_curproc->p_user->u_ofile[i]->refcont);
-    }
-  }
 }
 
 /* safe guards */
@@ -291,20 +124,6 @@ int close_fs(struct file *file) {
   return -ENOSYS;
 }
 
-DIR *opendir_fs(struct inode *in) {
-  if (in->ops && in->ops->opendir) {
-    return in->ops->opendir(in);
-  }
-  return (DIR *)-ENOSYS;
-}
-
-int closedir_fs(struct inode *in, DIR *d) {
-  if (in->ops && in->ops->closedir) {
-    return in->ops->closedir(in, d);
-  }
-  return -ENOSYS;
-}
-
 int create_fs(struct inode *in, const char *name, mode_t mode) {
   if (in && in->ops->creat) {
     return in->ops->creat(in, name, mode);
@@ -319,7 +138,7 @@ int unlink_fs(struct inode *in, const char *name) {
   return -ENOSYS;
 }
 
-fsino_t lookup_fs(struct inode *restrict in, const char *restrict name) {
+ino_t lookup_fs(struct inode *restrict in, const char *restrict name) {
   if ((S_ISDIR(in->mode)) && in->ops && in->ops->lookup) {
     return in->ops->lookup(in, name);
   }
@@ -355,22 +174,18 @@ struct inode *lookup_vfs_i(char *pth) {
   ino_t         ino;
   struct inode *tmp = inode;
   while (tok) {
-    //printkf("searching for: %s in inode %d\n", tok, inode->ino);
-    //  printkf("in inode %x\n", inode->mode & S_IFREG);
     ino = lookup_fs(inode, tok);
-    //printkf("ino (lookup): %d\n", ino);
+  
     if ((int)ino == -1) {
       printk("lookup_vfs: file not found\n");
-      // free(pth);
+    
       return NULL;
     }
     inode = iget(inode->sb, ino);
 
     iput(tmp);
-    // printkf("inode (iget): %x freed: %x\n", inode, tmp);
+
     if (inode->iflags & IN_MOUNT && inode->mnt && inode->mnt->sb) {
-      // printkf("inode is a mount\n");
-      // inode = inode->mnt->sb->s_root;
       struct inode *t = inode;
       inode           = iget(inode->mnt->sb, inode->mnt->sb->s_root->ino);
       iput(t);
@@ -383,16 +198,12 @@ struct inode *lookup_vfs_i(char *pth) {
     depth++;
 
     if (depth == mdepth) {
-      // free(pth);
       return inode;
     }
-
-    // memcpy(&tmp, inode, sizeof(tmp));
 
     tok = strtok_r(NULL, "/", &sv);
   }
 
-  // free(pth);
   return inode;
 }
 
@@ -522,7 +333,7 @@ ssize_t fsys_read(int fd, void *buf, size_t count) {
     return -EBADF;
   if (S_ISDIR(f->inode->mode))
     return -EISDIR;
-  if (f->flags & O_WRONLY)
+  if (O_ISW(f->flags))
     return -EPERM;
 
   int allow = check_perm(f, S_IROTH);
@@ -550,8 +361,8 @@ ssize_t fsys_write(int fd, void *buf, size_t count) {
     return -EBADF;
   if (S_ISDIR(f->inode->mode))
     return -EISDIR;
-  if (f->flags & O_RDONLY)
-    return -EPERM;
+  if (O_ISR(f->flags))
+    return -EPERM; 
 
   int allow = check_perm(f, S_IWOTH);
   if (!allow)
@@ -562,7 +373,7 @@ ssize_t fsys_write(int fd, void *buf, size_t count) {
 }
 
 int fsys_open(const char *pathname, int flags) {
-  if (!(flags & (O_RDONLY | O_WRONLY | O_RDWR)))
+  if (((flags & O_ACCMODE) == 3))
     return -EINVAL;
 
   struct inode *in = lookup_vfs(pathname);
@@ -657,28 +468,6 @@ int fsys_creat(const char *pathname, mode_t mode) {
   return ret;
 }
 
-DIR *fsys_opendir(const char *path) {
-  if (!path)
-    return (DIR *)-EFAULT;
-
-  struct inode *in = lookup_vfs(path);
-  if (!in)
-    return (DIR *)-ENOENT;
-  if (!(S_ISDIR(in->mode))) {
-    iput(in);
-    return (DIR *)-ENOTDIR;
-  }
-
-  DIR *ret = opendir_fs(in);
-  iput(in);
-  return ret;
-};
-
-int fsys_closedir(struct inode *in, DIR *d) {
-  // printkf("closedir on in %x\n", in);
-  return closedir_fs(in, d);
-}
-
 int fsys_chdir(const char *path) {
   if (!path)
     return -EFAULT;
@@ -758,7 +547,7 @@ int fsys_fstat(int fd, struct stat *statbuf) {
   statbuf->st_gid = in->gid;
   statbuf->st_dev = in->sb->s_dev;
   statbuf->st_rdev = in->rdev;
-  statbuf->st_blksize = in->blksiz;
+  statbuf->st_blksize = in->sb->s_blocksize;
   statbuf->st_blocks = in->blkcount;
   // ! expand!!
 
@@ -819,46 +608,6 @@ char *permget(mode_t mode, uint16_t perm) {
   memcpy(s + 7, plist[(perm >> 0) & 7], 3);
 
   return s;
-}
-
-int lsdir(const char *path, int flg) {
-  // printkf("cwd: %s\n", p_curproc->p_user->u_cdirname);
-
-  DIR *const d = opendir(path);
-  if (!d) {
-    perror("ls: opendir");
-    return 1;
-  }
-
-  if (flg & 1) {
-    for (int i = 0; i < d->count; i++) {
-
-      if (flg & 2)
-        printkf("% 8x ", d[i].in->ino);
-
-      char *p = permget(d[i].in->mode, d[i].in->mode & 0777);
-      printkf("%s ", p);
-      free(p);
-
-      d[i].size ? printkf("% 4d ", d[i].size) : printkf("     ");
-      printkf("%s\n", d[i].data);
-    }
-  } else {
-    for (int i = 0; i < d->count; i++) {
-      printkf("%s ", d[i].data);
-    }
-    putchr('\n');
-  }
-
-  // printkf("pat: %s\n", path);
-
-  struct inode *in = lookup_vfs(path);
-  // printkf("%x\n", in->hnode);
-  if (closedir(in, d)) {
-    perror("ls: closedir");
-  }
-  iput(in);
-  return 0;
 }
 
 int nlsdir(const char *path, int flg) {

@@ -25,13 +25,18 @@ struct device {
   void *pdata;
 
   struct dev_ops ops;
+  struct device *next;
 };
 
 struct inode *creat_devfs(const char *name, struct device *d, uint16_t maj, uint16_t min);
+struct inode *creat_blockdev(const char *name, struct device *dev, uint16_t maj, uint16_t min);
 int register_dev(uint16_t maj, uint16_t min, struct device *dev);
 
 struct device *getdev(struct inode *in);
 void init_devs();
+
+struct block_dev *blkdev_get_dev(dev_t dev);
+struct block_dev *blkdev_get_path(const char *path);
 
 /* device related syscalls */
 
